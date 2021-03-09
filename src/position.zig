@@ -1,54 +1,81 @@
 const std = @import("std");
+const Color = @import("./piece.zig").Color;
 
 
 // Position contains the complete game state after a turn.
-// board is the board state as an array of pieces. The array is 128 elements long,
-// rather than 64, because it is in 0x88 form. This essentially places a junk board
-// to the right of the main board, like so:
-//
-// 0 0 0 0 0 0 0 0 x x x x x x x x
-// 0 0 0 0 0 0 0 0 x x x x x x x x
-// 0 0 0 0 0 0 0 0 x x x x x x x x
-// 0 0 0 0 0 0 0 0 x x x x x x x x
-// 0 0 0 0 0 0 0 0 x x x x x x x x
-// 0 0 0 0 0 0 0 0 x x x x x x x x
-// 0 0 0 0 0 0 0 0 x x x x x x x x
-// 0 0 0 0 0 0 0 0 x x x x x x x x
-//
-// The bottom left hand corner is index 0, while the top right hand corner is 127.
-// 0x88 form has the advantage of allowing very fast checks to see if a position is
-// on the board, which is used in move generation.
-// castling is a byte that represents castling rights for both players. Only the
-// lower 4 bits are used, with 1 indicating castling is allowed.
-// x x x x _ _ _ _
-//         ^ ^ ^ ^
-//         | | | |
-//         | | | |
-//         + | | |
-// White king| | |
-//           + | |
-// White queen | |
-//             | |
-// Black king+-+ |
-//               |
-// Black queen+--+
-// toMove is the colour of the player who is next to move.
-// enPassantTarget is the index of a square where there is an en passant
-// opportunity. If a pawn was double pushed in the previous turn, its jumped
-// position will appear as the en passant target.
-// halfmove and fullmove represent the time elapsed in the game.
-
-
 pub const Position = struct {
-    board:           [128]u8,
-    // castling:        u8,
-    // toMove:          u8,
-    // enPassantTarget: u8,
-    // halfmove:        u8,
-    // fullmove:        u32,
+    // board is the board state as an array of pieces. The array is 128 elements long,
+    // rather than 64, because it is in 0x88 form. This essentially places a junk board
+    // to the right of the main board, like so:
+    //
+    // 0 0 0 0 0 0 0 0 x x x x x x x x
+    // 0 0 0 0 0 0 0 0 x x x x x x x x
+    // 0 0 0 0 0 0 0 0 x x x x x x x x
+    // 0 0 0 0 0 0 0 0 x x x x x x x x
+    // 0 0 0 0 0 0 0 0 x x x x x x x x
+    // 0 0 0 0 0 0 0 0 x x x x x x x x
+    // 0 0 0 0 0 0 0 0 x x x x x x x x
+    // 0 0 0 0 0 0 0 0 x x x x x x x x
+    //
+    // The bottom left hand corner is index 0, while the top right hand corner is 127.
+    // 0x88 form has the advantage of allowing very fast checks to see if a position is
+    // on the board, which is used in move generation.
+    board:              [128]u8,
+
+    // to_move is the colour of the player who is next to move.
+    to_move:            Color,
+
+    // castling is a nibble that represents castling rights for both players. A 1 indicates that
+    // castling is allowed.
+    //
+    //         _ _ _ _
+    //         ^ ^ ^ ^
+    //         | | | |
+    //         | | | |
+    //         + | | |
+    // White king| | |
+    //           + | |
+    // White queen | |
+    //             | |
+    // Black king+-+ |
+    //               |
+    // Black queen+--+
+    castling:           u4,
+
+    // en_passant_target is the index of a square where there is an en passant
+    // opportunity. If a pawn was double pushed in the previous turn, its jumped
+    // position will appear as the en passant target.
+    en_passant_target: u8,
+
+    // halfmove and fullmove represent the time elapsed in the game.
+    halfmove:        u8,
+    fullmove:        u32,
+
+    pub fn eq(self: Position, other: Position) bool {
+        if (self.board.len != other.board.len) return false;
+        for (self.board) |sq, i| {
+            if (other.board[i] != sq) return false;
+        }
+
+        if (self.to_move != other.to_move) return false;
+        if (self.castling != other.castling) return false;
+        if (self.en_passant_target != other.en_passant_target) return false;
+        if (self.halfmove != other.halfmove) return false;
+        if (self.fullmove != other.fullmove) return false;
+
+        return true;
+    }
 };
 
-pub fn fromFEN(fen: [:0]const u8) *Position {
+const CanCastle = enum(u4) {
+    white_king  = 0b1000,
+    white_queen = 0b0100,
+    black_king  = 0b0010,
+    black_queen = 0b0001,
+    invalid     = 0,
+};
+
+pub fn fromFEN(fen: [:0]const u8) Position {
     // The FEN for the starting position looks like this:
     //         rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
     var i: u16 = 0;
@@ -60,8 +87,6 @@ pub fn fromFEN(fen: [:0]const u8) *Position {
     var board_index: u8 = 112;
 
     while (true) {
-        std.debug.print("i: {}, board_index: {}, fen[i]: {}\n", .{i, board_index, fen[i]});
-
         // Skip the slashes which separate ranks
         if (fen[i] == '/') {
             i += 1;
@@ -93,7 +118,60 @@ pub fn fromFEN(fen: [:0]const u8) *Position {
         i += 1;
     }
 
-    return &Position{.board = board_position};
+    // Find the next player to move
+    i += 1;
+    const to_move = if (fen[i] == 'w') Color.white else Color.black;
+
+    i += 2;
+
+    // Castling
+    var castling: u4 = 0;
+
+    while (fen[i] != ' ') {
+        castling |= @enumToInt(switch (fen[i]) {
+            'K' => CanCastle.white_king,
+            'Q' => CanCastle.white_queen,
+            'k' => CanCastle.black_king,
+            'q' => CanCastle.black_queen,
+            else => CanCastle.invalid,
+        });
+        i += 1;
+    }
+
+    // En passant
+    i += 1;
+    var en_passant_target: u8 = 0;
+    if (fen[i] != '-') {
+        const file = fen[i] - 'a';
+        const rank = fen[i + 1] - '0';
+
+        en_passant_target = rfToEx88(RankAndFile{
+            .file = file,
+            .rank = rank,
+        });
+    }
+
+    i += 3;
+
+    // Halfmove
+    const halfmove_start = i;
+    while (fen[i] != ' ') {
+        i += 1;
+    }
+
+    const halfmove: u8 = std.fmt.parseInt(u8, fen[halfmove_start..i], 10) catch 0;
+
+    i += 1;
+
+    // Fullmove
+    const fullmove_start = i;
+    while (fen[i] != ' ' and i < fen.len) {
+        i += 1;
+    }
+
+    const fullmove: u8 = std.fmt.parseInt(u8, fen[fullmove_start..i], 10) catch 0;
+
+    return Position{.board = board_position, .to_move = to_move, .castling = castling, .en_passant_target = en_passant_target, .halfmove = halfmove, .fullmove = fullmove};
 }
 
 // Convert a FEN piece code (e.g. p) to the 0x88 byte form
@@ -112,5 +190,30 @@ fn fromFENCode(fen: u8) u8 {
         'R' => 5,
         'P' => 1,
         else => 0,
+    };
+}
+
+// Convert from rank and file to 0x88 index
+// https://en.wikipedia.org/wiki/0x88
+pub const RankAndFile = struct {
+    rank: u8,
+    file: u8,
+
+    pub fn eq(self: RankAndFile, other: RankAndFile) bool {
+        if (self.rank != other.rank) return false;
+        if (self.file != other.file) return false;
+
+        return true;
+    }
+};
+
+pub fn rfToEx88(rf: RankAndFile) u8 {
+    return (rf.rank - 1) * 16 + rf.file;
+}
+
+pub fn ex88ToRf(ex88: u8) RankAndFile {
+    return RankAndFile{
+        .file = ex88 & 7,
+        .rank = (ex88 >> 4) + 1,
     };
 }
