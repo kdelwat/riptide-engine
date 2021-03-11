@@ -222,7 +222,7 @@ fn clearToCastle(pos: position.Position, side: u32) bool {
 }
 
 // From the perspective of the to_move player, is their king in check?
-fn isKingInCheck(pos: position.Position) bool {
+pub fn isKingInCheck(pos: position.Position) bool {
     // Find the index of the king on the board.
     var king_index: u8 = 0;
     for (pos.board) |p, i| {
@@ -240,18 +240,3 @@ fn isKingInCheck(pos: position.Position) bool {
     // Determine whether the index is attacked.
     return attack.isAttacked(pos, king_index);
 }
-
-
-
-//// Append the contents of b onto a, then deinit b.
-//fn append(a: *ArrayList(u32), b: *ArrayList(u32)) !void {
-//    // Ensure enough capacity for the appended items
-//    // Do this once for performance
-//    try a.ensureCapacity(a.capacity + b.capacity);
-//
-//    for (b.items) |item| {
-//        try a.append(item);
-//    }
-//
-//    b.deinit();
-//}

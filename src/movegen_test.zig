@@ -6,6 +6,7 @@ const ArrayList = std.ArrayList;
 const position = @import("./position.zig");
 const movegen = @import("./movegen.zig");
 const generateMoves = movegen.generateMoves;
+const isKingInCheck = movegen.isKingInCheck;
 
 test "generateMoves - Starting position" {
     var moves = ArrayList(u32).init(test_allocator);
@@ -182,3 +183,9 @@ test "generateMoves - Can't castle through check" {
     moves.deinit();
 }
 
+test "isKingInCheck" {
+    expect(isKingInCheck(position.fromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")) == false);
+    expect(isKingInCheck(position.fromFEN("rnbqkb1r/ppp1pp1p/6p1/1B1n4/3P4/2N5/PP2PPPP/R1BQK1NR b KQkq - 0 1")) == true);
+    expect(isKingInCheck(position.fromFEN("rnbq1b1r/pppkpppp/3pPn2/8/2PP4/8/PP3PPP/RNBQKBNR w KQkq - 0 1")) == false);
+    expect(isKingInCheck(position.fromFEN("rnbq1b1r/pppkpppp/3pPn2/8/2PP4/8/PP3PPP/RNBQKBNR b KQkq - 0 1")) == true);
+}
