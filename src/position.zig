@@ -1,6 +1,6 @@
 const std = @import("std");
-const Color = @import("./piece.zig").Color;
-
+const piece = @import("./piece.zig");
+const Color = piece.Color;
 
 // Position contains the complete game state after a turn.
 pub const Position = struct {
@@ -51,6 +51,7 @@ pub const Position = struct {
     halfmove:        u8,
     fullmove:        u32,
 
+    // Equality with another position
     pub fn eq(self: Position, other: Position) bool {
         if (self.board.len != other.board.len) return false;
         for (self.board) |sq, i| {
@@ -64,6 +65,34 @@ pub const Position = struct {
         if (self.fullmove != other.fullmove) return false;
 
         return true;
+    }
+
+    // Checks if there is a piece at the given index
+    pub fn pieceOn(self: Position, i: u8) bool {
+        return self.board[i] & piece.PIECE_IDENTITY_MASK != 0;
+    }
+
+    // Given the index of an attacking pawn, returns whether the pawn can attack the current en
+    // passant target, if it exists, from the side in to_move.
+    pub fn isEnPassantTarget(self: Position, index: u8) bool {
+        const left_target: u8 = if (self.to_move == Color.white) index + 15 else index - 15;
+        const right_target: u8 = if (self.to_move == Color.white) index + 17 else index - 17;
+    
+        return self.en_passant_target != 0 and (self.en_passant_target == left_target or self.en_passant_target == right_target);
+    }
+
+    pub fn hasCastleRight(self: Position, queenside: bool) bool {
+        var offset: u4 = 3;
+
+        if (queenside) {
+            offset -= 1;
+        }
+
+        if (self.to_move == Color.black) {
+            offset -= 2;
+        }
+
+        return (self.castling & (@intCast(u32, 1) << offset)) != 0;
     }
 };
 
@@ -216,4 +245,32 @@ pub fn ex88ToRf(ex88: u8) RankAndFile {
         .file = ex88 & 7,
         .rank = (ex88 >> 4) + 1,
     };
+}
+
+// Returns true if the index is on the physical board, false otherwise, using
+// the 0x88 form for a fast check.
+const OFF_BOARD: u8 = 0x88;
+pub fn isOnBoard(index: u8) bool {
+    return index & OFF_BOARD == 0;
+}
+
+
+// Determines if a piece is on the rank, from 0 to 7, relative to the color of
+// the player passed. So 0 will be the row closest to the player, regardless on
+// the color selected.
+fn isOnRelativeRank(index: u8, color: Color, rank: u8) bool {
+    const start: u8 = if (color == Color.white) 16 * rank else 112 - 16 * rank;
+    const end: u8 = start + 7;
+
+    return (index >= start and index <= end);
+}
+
+// Determines if a pawn is on its starting row.
+pub fn isOnStartingRow(index: u8, color: Color) bool {
+    return isOnRelativeRank(index, color, 1);
+}
+
+// Determines if a pawn is on the final rank, for promotions.
+pub fn isOnFinalRank(index: u8, color: Color) bool {
+    return isOnRelativeRank(index, color, 7);
 }
