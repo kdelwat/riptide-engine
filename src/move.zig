@@ -1,4 +1,5 @@
-const PieceType = @import("./piece.zig").PieceType;
+const piece = @import("./piece.zig");
+const PieceType = piece.PieceType;
 
 // A move is encoded as a 32-bit integer.
 //
@@ -29,6 +30,9 @@ const PieceType = @import("./piece.zig").PieceType;
 // | rook promo-capture   |         1 |       1 |         1 |         0 |
 // | queen promo-capture  |         1 |       1 |         1 |         1 |
 // +----------------------+-----------+---------+-----------+-----------+
+
+// Empty move
+pub const NULL_MOVE = 0;
 
 // Codes used to determine move types.
 const CAPTURE = 0x1 << 18;
@@ -81,4 +85,80 @@ pub fn createPromotionCaptureMove(from: u8, to: u8, pieceType: PieceType) u32 {
 // Create an en passant capture between two indices.
 pub fn createEnPassantCaptureMove(from: u8, to: u8) u32 {
     return createCaptureMove(from, to) | EN_PASSANT;
+}
+
+// Get the from index of a move
+pub fn fromIndex(m: u32) u8 {
+    return @intCast(u8, (m & (0xFF << 8)) >> 8);
+}
+// Get the to index of a move
+pub fn toIndex(m: u32) u8 {
+    return @intCast(u8, m & 0xFF);
+}
+
+// Extract the piece that the move promotes to, in the case of promotions or
+// promotion capture. This information is encoded in the special section of the
+// move, as in the above table.
+const PROMOTION_MASK = 0x3 << 16;
+pub fn getPromotedPiece(m: u32, piece_promoted: u8) u8 {
+    var new_piece: u8 = 0;
+
+    switch (m & PROMOTION_MASK) {
+        BISHOP_PROMOTION => new_piece |= @enumToInt(PieceType.bishop),
+        KNIGHT_PROMOTION => new_piece |= @enumToInt(PieceType.knight),
+        QUEEN_PROMOTION => new_piece |= @enumToInt(PieceType.queen),
+        ROOK_PROMOTION => new_piece |= @enumToInt(PieceType.rook),
+        else => unreachable,
+    }
+
+    new_piece |= @enumToInt(piece.pieceColor(piece_promoted));
+
+    return new_piece;
+}
+
+const MOVE_TYPE_MASK = 0xF << 16;
+
+// Is the move a quiet move?
+pub fn isQuiet(m: u32) bool {
+    return (m & MOVE_TYPE_MASK == 0);
+}
+
+// Is the move a promotion?
+pub fn isPromotion(m: u32) bool {
+    return (m & PROMOTION != 0);
+}
+
+// Is the move a promotion capture?
+pub fn isPromotionCapture(m: u32) bool {
+    return isPromotion(m) and (m & CAPTURE != 0);
+}
+
+// Is the move a capture?
+pub fn isCapture(m: u32) bool {
+    return (m & CAPTURE != 0);
+}
+
+// Is the move a castle?
+pub fn isCastle(m: u32) bool {
+    return isKingCastle(m) or isQueenCastle(m);
+}
+
+// Is the move a kingside castle?
+pub fn isKingCastle(m: u32) bool {
+    return ((m & MOVE_TYPE_MASK)>>16 == 2);
+}
+
+// Is the move a queenside castle?
+pub fn isQueenCastle(m: u32) bool {
+    return ((m & MOVE_TYPE_MASK)>>16 == 3);
+}
+
+// Is the move a double pawn push?
+pub fn isDoublePawnPush(m: u32) bool {
+    return ((m & MOVE_TYPE_MASK)>>16 == 1);
+}
+
+// Is the move an en passant capture?
+pub fn isEnPassantCapture(m: u32) bool {
+    return isCapture(m) and (m & EN_PASSANT != 0);
 }

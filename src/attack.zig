@@ -68,14 +68,8 @@ const ATTACK_ARRAY = [_]u8{
 };
 
 // isAttacked determines if a piece is under attack. It takes the current game
-// position, the index of the piece in question (in 0x88 form). It assumes that the attacking
-// side is the player opposite to_move.
-pub fn isAttacked(pos: position.Position, target_index: u8) bool {
-    const attacker: Color = switch (pos.to_move) {
-        Color.white => Color.black,
-        Color.black => Color.white,
-    };
-
+// position, the index of the piece in question (in 0x88 form).
+pub fn isAttacked(pos: position.Position, target_index: u8, attacker: Color) bool {
     // Declare bitboards for representing the pieces present. While the normal board position is in 0x88 form, these
     // bitboards don't require the extra squares and simple represent an 8x8 grid, meaning that they can fit in a
     // 64-bit integer.
@@ -181,6 +175,8 @@ pub fn isAttacked(pos: position.Position, target_index: u8) bool {
     // and return true if possible.
     return attack_map & @shlExact(@intCast(u64, 1), @intCast(u6, map0x88ToStandard(target_index))) != 0;
 }
+
+
 
 fn map0x88ToStandard(index: u8) u8 {
     const rank: u8 = index / 16;

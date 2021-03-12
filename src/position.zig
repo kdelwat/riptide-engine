@@ -59,6 +59,7 @@ pub const Position = struct {
         }
 
         if (self.to_move != other.to_move) return false;
+
         if (self.castling != other.castling) return false;
         if (self.en_passant_target != other.en_passant_target) return false;
         if (self.halfmove != other.halfmove) return false;
@@ -94,6 +95,21 @@ pub const Position = struct {
 
         return (self.castling & (@intCast(u32, 1) << offset)) != 0;
     }
+
+    pub fn opponentHasCastleRight(self: Position, queenside: bool) bool {
+        var offset: u4 = 3;
+
+        if (queenside) {
+            offset -= 1;
+        }
+
+        if (self.to_move == Color.white) {
+            offset -= 2;
+        }
+
+        return (self.castling & (@intCast(u32, 1) << offset)) != 0;
+    }
+
 };
 
 const CanCastle = enum(u4) {
@@ -178,9 +194,12 @@ pub fn fromFEN(fen: [:0]const u8) Position {
             .file = file,
             .rank = rank,
         });
+
+        i += 3;
+    } else {
+        i += 2;
     }
 
-    i += 3;
 
     // Halfmove
     const halfmove_start = i;

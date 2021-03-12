@@ -6,10 +6,44 @@ const piece = @import("./piece.zig");
 const PieceType = piece.PieceType;
 const Color = piece.Color;
 const move = @import("./move.zig");
+const make_move = @import("./make_move.zig");
 const attack = @import("./attack.zig");
+const debug = @import("./debug.zig");
 
 const BOARD_SIZE: u8 = 128;
 
+// Generate legal moves for a position.
+// Illegal moves are NULLed.
+pub fn generateLegalMoves(moves: *ArrayList(u32), pos: *position.Position) void {
+    // Generate pseudo-legal moves
+    generateMoves(moves, pos.*);
+
+    const current_player = pos.to_move;
+
+    // For each pseudo-legal move, make the move, then see if the king is in
+    // check. If it isn't, the move is legal.
+    for (moves.items) |m, i| {
+        const artifacts = make_move.makeMove(pos, m);
+
+        if (isKingInCheck(pos.*, current_player)) {
+            moves.items[i] = move.NULL_MOVE;
+        }
+
+        make_move.unmakeMove(pos, m, artifacts);
+    }
+}
+
+pub fn countNonNullMoves(moves: *ArrayList(u32)) u32 {
+    var count: u32 = 0;
+
+    for (moves.items) |m| {
+        if (m != move.NULL_MOVE) count += 1;
+    }
+
+    return count;
+}
+
+// Generate pseudo-legal moves for a position
 pub fn generateMoves(moves: *ArrayList(u32), pos: position.Position) void {
     var i: u8 = 0;
     while (i < BOARD_SIZE) {
@@ -157,11 +191,11 @@ fn generateRegularMoves(moves: *ArrayList(u32), pos: position.Position, index: u
 }
 
 fn generateCastlingMoves(moves: *ArrayList(u32), pos: position.Position) !void {
-    if (pos.hasCastleRight(false) and clearToCastle(pos, move.KING_CASTLE) and !isKingInCheck(pos)) {
+    if (pos.hasCastleRight(false) and clearToCastle(pos, move.KING_CASTLE) and !isKingInCheck(pos, pos.to_move)) {
         try moves.append(move.KING_CASTLE);
     }
 
-    if (pos.hasCastleRight(true) and clearToCastle(pos, move.QUEEN_CASTLE) and !isKingInCheck(pos)) {
+    if (pos.hasCastleRight(true) and clearToCastle(pos, move.QUEEN_CASTLE) and !isKingInCheck(pos, pos.to_move)) {
         try moves.append(move.QUEEN_CASTLE);
     }
 }
@@ -208,12 +242,17 @@ fn clearToCastle(pos: position.Position, side: u32) bool {
     // For each index in the potentially-checked indices, ensure that the index
     // is not attacked. TODO: This could be optimised by only generating the attack
     // map once.
+    const attacker: Color = switch (pos.to_move) {
+        Color.white => Color.black,
+        Color.black => Color.white,
+    };
+
     for (CASTLING_CHECKS[castling_index]) |check_index| {
         if (check_index == 0) {
             break;
         }
 
-        if (attack.isAttacked(pos, check_index)) {
+        if (attack.isAttacked(pos, check_index, attacker)) {
             return false;
         }
     }
@@ -221,8 +260,7 @@ fn clearToCastle(pos: position.Position, side: u32) bool {
     return true;
 }
 
-// From the perspective of the to_move player, is their king in check?
-pub fn isKingInCheck(pos: position.Position) bool {
+pub fn isKingInCheck(pos: position.Position, side: Color) bool {
     // Find the index of the king on the board.
     var king_index: u8 = 0;
     for (pos.board) |p, i| {
@@ -230,13 +268,18 @@ pub fn isKingInCheck(pos: position.Position) bool {
             position.isOnBoard(@intCast(u8, i))
             and p != 0
             and piece.pieceType(p) == PieceType.king
-            and piece.pieceColor(p) == pos.to_move
+            and piece.pieceColor(p) == side
         ) {
             king_index = @intCast(u8, i);
             break;
         }
     }
 
+    const attacker: Color = switch (side) {
+        Color.white => Color.black,
+        Color.black => Color.white,
+    };
+
     // Determine whether the index is attacked.
-    return attack.isAttacked(pos, king_index);
+    return attack.isAttacked(pos, king_index, attacker);
 }

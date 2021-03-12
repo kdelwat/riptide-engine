@@ -35,6 +35,21 @@ test "fromFEN - empty board with other data variety" {
     );
 }
 
+test "fromFEN - bug" {
+    expect(
+        position.fromFEN("8/8/8/8/8/8/8/8 b KQkq - 1 2").eq(
+            position.Position{
+                .board = [_]u8{0} ** 128,
+                .to_move = Color.black,
+                .castling = 0b1111,
+                .en_passant_target = 0,
+                .halfmove = 1,
+                .fullmove = 2,
+            }
+        )
+    );
+}
+
 test "fromFEN - starting board" {
     expect(
         position.fromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").eq(
