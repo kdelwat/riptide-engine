@@ -69,17 +69,36 @@ pub const Position = struct {
     }
 
     // Checks if there is a piece at the given index
-    pub fn pieceOn(self: Position, i: u8) bool {
+    pub fn pieceOn(self: Position, i: u16) bool {
         return self.board[i] & piece.PIECE_IDENTITY_MASK != 0;
     }
 
     // Given the index of an attacking pawn, returns whether the pawn can attack the current en
     // passant target, if it exists, from the side in to_move.
     pub fn isEnPassantTarget(self: Position, index: u8) bool {
-        const left_target: u8 = if (self.to_move == Color.white) index + 15 else index - 15;
-        const right_target: u8 = if (self.to_move == Color.white) index + 17 else index - 17;
-    
-        return self.en_passant_target != 0 and (self.en_passant_target == left_target or self.en_passant_target == right_target);
+        if (self.en_passant_target == 0) {
+            return false;
+        }
+
+        var is_target: bool = false;
+        // TODO: Could allow overflow for these? Then it would wrap to off the board
+        if (self.to_move == Color.white or (self.to_move == Color.black and index >= 15)) {
+            const left_target: u8 = if (self.to_move == Color.white) index + 15 else index - 15;
+
+            if (self.en_passant_target == left_target) {
+                is_target = true;
+            }
+        }
+
+        if (self.to_move == Color.white or (self.to_move == Color.black and index >= 17)) {
+            const right_target: u8 = if (self.to_move == Color.white) index + 17 else index - 17;
+
+            if (self.en_passant_target == right_target) {
+                is_target = true;
+            }
+        }
+
+        return is_target;
     }
 
     pub fn hasCastleRight(self: Position, queenside: bool) bool {
@@ -268,8 +287,8 @@ pub fn ex88ToRf(ex88: u8) RankAndFile {
 
 // Returns true if the index is on the physical board, false otherwise, using
 // the 0x88 form for a fast check.
-const OFF_BOARD: u8 = 0x88;
-pub fn isOnBoard(index: u8) bool {
+const OFF_BOARD: u16 = 0x88;
+pub fn isOnBoard(index: u16) bool {
     return index & OFF_BOARD == 0;
 }
 
@@ -277,19 +296,19 @@ pub fn isOnBoard(index: u8) bool {
 // Determines if a piece is on the rank, from 0 to 7, relative to the color of
 // the player passed. So 0 will be the row closest to the player, regardless on
 // the color selected.
-fn isOnRelativeRank(index: u8, color: Color, rank: u8) bool {
-    const start: u8 = if (color == Color.white) 16 * rank else 112 - 16 * rank;
-    const end: u8 = start + 7;
+fn isOnRelativeRank(index: u16, color: Color, rank: u8) bool {
+    const start: u16 = if (color == Color.white) 16 * rank else 112 - 16 * rank;
+    const end: u16 = start + 7;
 
     return (index >= start and index <= end);
 }
 
 // Determines if a pawn is on its starting row.
-pub fn isOnStartingRow(index: u8, color: Color) bool {
+pub fn isOnStartingRow(index: u16, color: Color) bool {
     return isOnRelativeRank(index, color, 1);
 }
 
 // Determines if a pawn is on the final rank, for promotions.
-pub fn isOnFinalRank(index: u8, color: Color) bool {
+pub fn isOnFinalRank(index: u16, color: Color) bool {
     return isOnRelativeRank(index, color, 7);
 }

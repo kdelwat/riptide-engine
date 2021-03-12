@@ -101,34 +101,40 @@ fn generatePawnMoves(moves: *ArrayList(u32), pos: position.Position, index: u8) 
     }
 
     // Generate attacks.
-    const left_attack: u8 = if (white) index + 15 else index - 15;
-    const right_attack: u8 = if (white) index + 17 else index - 17;
+    if (white or (!white and index >= 15)) {
+        const left_attack: u16 = if (white) index + 15 else index - 15;
 
-    // For each attack, check if a capture is possible.
-    if (position.isOnBoard(left_attack) and pos.pieceOn(left_attack) and piece.pieceColor(pos.board[left_attack]) != pos.to_move) {
-        // If the pawn is capturing a piece on the final rank, generate
-        // promotion captures.
-        if (position.isOnFinalRank(left_attack, pos.to_move)) {
-            try moves.append(move.createPromotionCaptureMove(index, left_attack, PieceType.knight));
-            try moves.append(move.createPromotionCaptureMove(index, left_attack, PieceType.bishop));
-            try moves.append(move.createPromotionCaptureMove(index, left_attack, PieceType.rook));
-            try moves.append(move.createPromotionCaptureMove(index, left_attack, PieceType.queen));
-        } else {
-            // Otherwise, generate a regular capture.
-            try moves.append(move.createCaptureMove(index, left_attack));
+        // For each attack, check if a capture is possible.
+        if (position.isOnBoard(left_attack) and pos.pieceOn(left_attack) and piece.pieceColor(pos.board[left_attack]) != pos.to_move) {
+            // If the pawn is capturing a piece on the final rank, generate
+            // promotion captures.
+            if (position.isOnFinalRank(left_attack, pos.to_move)) {
+                try moves.append(move.createPromotionCaptureMove(index, @truncate(u8, left_attack), PieceType.knight));
+                try moves.append(move.createPromotionCaptureMove(index, @truncate(u8, left_attack), PieceType.bishop));
+                try moves.append(move.createPromotionCaptureMove(index, @truncate(u8, left_attack), PieceType.rook));
+                try moves.append(move.createPromotionCaptureMove(index, @truncate(u8, left_attack), PieceType.queen));
+            } else {
+                // Otherwise, generate a regular capture.
+                try moves.append(move.createCaptureMove(index, @truncate(u8, left_attack)));
+            }
         }
     }
-    if (position.isOnBoard(right_attack) and pos.pieceOn(right_attack) and piece.pieceColor(pos.board[right_attack]) != pos.to_move) {
-        // If the pawn is capturing a piece on the final rank, generate
-        // promotion captures.
-        if (position.isOnFinalRank(right_attack, pos.to_move)) {
-            try moves.append(move.createPromotionCaptureMove(index, right_attack, PieceType.knight));
-            try moves.append(move.createPromotionCaptureMove(index, right_attack, PieceType.bishop));
-            try moves.append(move.createPromotionCaptureMove(index, right_attack, PieceType.rook));
-            try moves.append(move.createPromotionCaptureMove(index, right_attack, PieceType.queen));
-        } else {
-            // Otherwise, generate a regular capture.
-            try moves.append(move.createCaptureMove(index, right_attack));
+
+    if (white or (!white and index >= 17)) {
+        const right_attack: u16 = if (white) index + 17 else index - 17;
+
+        if (position.isOnBoard(right_attack) and pos.pieceOn(right_attack) and piece.pieceColor(pos.board[right_attack]) != pos.to_move) {
+            // If the pawn is capturing a piece on the final rank, generate
+            // promotion captures.
+            if (position.isOnFinalRank(right_attack, pos.to_move)) {
+                try moves.append(move.createPromotionCaptureMove(index, @truncate(u8, right_attack), PieceType.knight));
+                try moves.append(move.createPromotionCaptureMove(index, @truncate(u8, right_attack), PieceType.bishop));
+                try moves.append(move.createPromotionCaptureMove(index, @truncate(u8, right_attack), PieceType.rook));
+                try moves.append(move.createPromotionCaptureMove(index, @truncate(u8, right_attack), PieceType.queen));
+            } else {
+                // Otherwise, generate a regular capture.
+                try moves.append(move.createCaptureMove(index, @truncate(u8, right_attack)));
+            }
         }
     }
 
