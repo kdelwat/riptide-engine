@@ -2,6 +2,8 @@ const std = @import("std");
 const piece = @import("./piece.zig");
 const Color = piece.Color;
 
+pub const BOARD_SIZE: u8 = 128;
+
 // Position contains the complete game state after a turn.
 pub const Position = struct {
     // board is the board state as an array of pieces. The array is 128 elements long,

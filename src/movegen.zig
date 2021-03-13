@@ -10,7 +10,6 @@ const make_move = @import("./make_move.zig");
 const attack = @import("./attack.zig");
 const debug = @import("./debug.zig");
 
-const BOARD_SIZE: u8 = 128;
 
 // Generate legal moves for a position.
 // Illegal moves are NULLed.
@@ -46,7 +45,7 @@ pub fn countNonNullMoves(moves: *ArrayList(u32)) u32 {
 // Generate pseudo-legal moves for a position
 pub fn generateMoves(moves: *ArrayList(u32), pos: position.Position) void {
     var i: u8 = 0;
-    while (i < BOARD_SIZE) {
+    while (i < position.BOARD_SIZE) {
         if (position.isOnBoard(i) and pos.pieceOn(i)) {
             const p: u8 = pos.board[i];
 
