@@ -1,6 +1,9 @@
 const std = @import("std");
 const File = std.fs.File;
 const position = @import("./position.zig");
+const uci = @import("./parse/uci.zig");
+const UciCommandType = uci.UciCommandType;
+const UciCommand = uci.UciCommand;
 
 const start_position = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
@@ -88,71 +91,34 @@ pub fn main() anyerror!void {
 }
 
 fn handleCommand(input: []const u8, stdout: File, stderr: File) !void {
-    if (std.mem.eql(u8, input, "uci")) {
-        try stdout.writer().print(
-            "id name Riptide\nid author Cadel Watson\nuciok\n",
-            .{},
-        );
-    } else if (std.mem.eql(u8, input, "isready")) {
-        try stdout.writer().print(
-            "readyok\n",
-            .{},
-        );
-    } else if (std.mem.eql(u8, input, "ucinewgame")) {
-        engine_data = GlobalData{
-            .pos = position.fromFEN(start_position),
-            .best_move = 0,
-        };
-        try stdout.writer().print(
-            "isready\n",
-            .{},
-        );
-    } else if (std.mem.eql(u8, input[0..8], "position")) {
-        var end_of_first_arg: usize = 0;
-        for (input[9..]) |c, i| {
-            try stderr.writer().print(
-                "c: {c}, i: {}\n",
-                .{c, i},
-            );
+    const c: UciCommand = (try uci.uci_command(std.testing.allocator, input)).value;
 
-            if (c == ' ') {
-                end_of_first_arg = i - 1;
-                break;
-            }
-        }
+    std.debug.print("parsed: {}", .{c});
 
-        if (end_of_first_arg == 0) {
-            end_of_first_arg = input.len - 2;
-        }
+    switch (c) {
+        UciCommandType.uci =>
+            try stdout.writer().print(
+                "id name Riptide\nid author Cadel Watson\nuciok\n",
+                .{},
+            ),
 
-        try stderr.writer().print(
-            "end_of_first_arg: {}\n",
-            .{end_of_first_arg},
-        );
+        UciCommandType.isready =>
+            try stdout.writer().print(
+                "readyok\n",
+                .{},
+            ),
 
-        if (std.mem.eql(u8, input[9..end_of_first_arg], "startpos")) {
-            engine_data = GlobalData{
-                .pos = position.fromFEN(start_position),
-                .best_move = 0,
-            };
-        } else {
-            var end_of_fen: usize = 0;
-            var fen_spaces_remaining: u8 = 6;
+        UciCommandType.position_startpos =>
+            startNewGame(start_position),
 
-            for (input[end_of_first_arg + 1..]) |c, i| {
-                if (c == ' ') {
-                    fen_spaces_remaining -= 1;
-                    if (fen_spaces_remaining == 0) {
-                        end_of_fen = i - 1;
-                        break;
-                    }
-                }
-            }
-
-            engine_data = GlobalData{
-                .pos = position.fromFEN(input[end_of_first_arg + 1..end_of_fen]),
-                .best_move = 0,
-            };
-        }
+        UciCommandType.ucinewgame =>
+            startNewGame(start_position),
     }
+}
+
+fn startNewGame(pos: []const u8) void {
+    engine_data = GlobalData{
+                   .pos = position.fromFEN(start_position),
+                   .best_move = 0,
+    };
 }

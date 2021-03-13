@@ -12,6 +12,12 @@ pub fn build(b: *Builder) void {
     const mode = b.standardReleaseOptions();
 
     const exe = b.addExecutable("riptide", "src/main.zig");
+
+    exe.addPackage(.{
+        .name = "mecha",
+        .path = "libs/mecha/mecha.zig",
+    });
+
     exe.setTarget(target);
     exe.setBuildMode(mode);
     exe.install();
