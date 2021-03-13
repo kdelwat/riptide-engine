@@ -141,7 +141,7 @@ const CanCastle = enum(u4) {
     invalid     = 0,
 };
 
-pub fn fromFEN(fen: [:0]const u8) Position {
+pub fn fromFEN(fen: []const u8) Position {
     // The FEN for the starting position looks like this:
     //         rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
     var i: u16 = 0;
