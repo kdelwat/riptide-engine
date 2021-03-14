@@ -1,10 +1,13 @@
 const std = @import("std");
 usingnamespace @import("mecha");
+const Fen = @import("./fen.zig").Fen;
+const fen = @import("./fen.zig").fen;
 
 pub const UciCommandType = enum {
     uci,
     isready,
     position_startpos,
+    position,
     ucinewgame,
 };
 
@@ -17,12 +20,13 @@ pub const UciCommand = union(UciCommandType) {
     uci: UciCommandUci,
     isready: UciCommandVoid,
     position_startpos: UciCommandPositionStartpos,
+    position: Fen,
     ucinewgame: UciCommandUciNewGame,
 };
 
-// toUnionStruct is based on toStruct from mecha, but takes in a union tag name and converts the parse result
-// into the struct type corresponding to that tag. It also supports void parsers, by creating an empty struct.
-fn ToUnionStructResult(comptime T: type) type {
+// toUnion is based on toStruct from mecha, but takes in a union tag name and converts the parse result
+// into a union.
+fn ToUnionResult(comptime T: type) type {
     return @TypeOf(struct {
         fn func(tuple: anytype) T {
             return undefined;
@@ -30,7 +34,7 @@ fn ToUnionStructResult(comptime T: type) type {
     }.func);
 }
 
-pub fn toUnionStruct(name: []const u8, comptime T: type) ToUnionStructResult(T) {
+pub fn toUnion(name: []const u8, comptime T: type) ToUnionResult(T) {
     return struct {
         fn func(tuple: anytype) T {
             const union_fields = @typeInfo(T).Union.fields;
@@ -45,27 +49,19 @@ pub fn toUnionStruct(name: []const u8, comptime T: type) ToUnionStructResult(T) 
 
             const struct_fields = @typeInfo(struct_type).Struct.fields;
 
-            var res: T = undefined;
             if (@TypeOf(tuple) == void) {
                 return @unionInit(UciCommand, name, .{});
             }
 
-            res = @unionInit(UciCommand, name, .{});
-            if (struct_fields.len != tuple.len)
-                @compileError(@typeName(T) ++ " and " ++ @typeName(@TypeOf(tuple)) ++ " does not have " ++
-                    "same number of fields. Conversion is not possible.");
-
-            inline for (struct_fields) |field, i|
-                @field(res, field.name) = tuple[i];
-
-            return res;
+            return @unionInit(UciCommand, name, tuple);
         }
     }.func;
 }
 
-const p_uci = map(UciCommand, toUnionStruct("uci", UciCommand), string("uci"));
-const p_isready = map(UciCommand, toUnionStruct("isready", UciCommand), string("isready"));
-const p_position_startpos = map(UciCommand, toUnionStruct("position_startpos", UciCommand), string("position startpos"));
-const p_ucinewgame = map(UciCommand, toUnionStruct("ucinewgame", UciCommand), string("ucinewgame"));
+const p_uci = map(UciCommand, toUnion("uci", UciCommand), string("uci"));
+const p_isready = map(UciCommand, toUnion("isready", UciCommand), string("isready"));
+const p_position = map(UciCommand, toUnion("position", UciCommand), combine(.{string("position "), fen}));
+const p_position_startpos = map(UciCommand, toUnion("position_startpos", UciCommand), string("position startpos"));
+const p_ucinewgame = map(UciCommand, toUnion("ucinewgame", UciCommand), string("ucinewgame"));
 
-pub const uci_command = combine(.{oneOf(.{ p_isready, p_position_startpos, p_ucinewgame, p_uci})});
+pub const uci_command = combine(.{oneOf(.{ p_isready, p_position, p_position_startpos, p_ucinewgame, p_uci})});

@@ -4,7 +4,7 @@ const position = @import("./position.zig");
 const uci = @import("./parse/uci.zig");
 const UciCommandType = uci.UciCommandType;
 const UciCommand = uci.UciCommand;
-
+const fen = @import("./parse/fen.zig");
 const start_position = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 // Store the current position and current best move of the engine, used globally
@@ -91,7 +91,8 @@ pub fn main() anyerror!void {
 }
 
 fn handleCommand(input: []const u8, stdout: File, stderr: File) !void {
-    const c: UciCommand = (try uci.uci_command(std.testing.allocator, input)).value;
+//    const f: fen.Fen = (try fen.fen(std.testing.allocator, input)).value;
+     const c: UciCommand = (try uci.uci_command(std.testing.allocator, input)).value;
 
     std.debug.print("parsed: {}", .{c});
 
@@ -113,12 +114,15 @@ fn handleCommand(input: []const u8, stdout: File, stderr: File) !void {
 
         UciCommandType.ucinewgame =>
             startNewGame(start_position),
+
+        UciCommandType.position =>
+            startNewGame(start_position),
     }
 }
 
 fn startNewGame(pos: []const u8) void {
     engine_data = GlobalData{
-                   .pos = position.fromFEN(start_position),
-                   .best_move = 0,
+       .pos = position.fromFEN(start_position),
+       .best_move = 0,
     };
 }
