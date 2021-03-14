@@ -1,6 +1,8 @@
 const std = @import("std");
 const piece = @import("./piece.zig");
 const Color = piece.Color;
+const parse_fen = @import("./parse/fen.zig").fen;
+const Fen = @import("./parse/fen.zig").Fen;
 
 pub const BOARD_SIZE: u8 = 128;
 
@@ -241,6 +243,84 @@ pub fn fromFEN(fen: []const u8) Position {
     const fullmove: u8 = std.fmt.parseInt(u8, fen[fullmove_start..i], 10) catch 0;
 
     return Position{.board = board_position, .to_move = to_move, .castling = castling, .en_passant_target = en_passant_target, .halfmove = halfmove, .fullmove = fullmove};
+}
+
+pub fn fromFENStruct(fen: Fen) Position {
+        // We need to convert the board string into a piece array. Due to the way
+        // FEN is structured, the first piece is at a8, which translates to 0x88
+        // index 112.
+        var i: u16 = 0;
+        var board_position: [128]u8 = [_]u8{0} ** 128;
+        var board_index: u8 = 112;
+
+        while (true) {
+            // Skip the slashes which separate ranks
+            if (fen.board[i] == '/') {
+                i += 1;
+                continue;
+            }
+
+            // Numbers in the board string indicate empty spaces, so we advance the
+            // board index by that number of spaces since there aren't any pieces in
+            // those positions.
+            if (fen.board[i] >= '1' and fen.board[i] <= '8') {
+                board_index += fen.board[i] - '0';
+            } else {
+                // Otherwise, look up the correct piece code and insert it.
+                board_position[board_index] = fromFENCode(fen.board[i]);
+                board_index += 1;
+            }
+
+            if (board_index == 8) {
+                // Done
+                i += 1;
+                break;
+            }
+
+            // Skip squares that aren't on the board
+            if (board_index % 16 > 7) {
+                board_index = ((board_index / 16) - 1) * 16;
+            }
+
+            i += 1;
+        }
+
+        // Find the next player to move
+        const to_move = if (fen.to_move[0] == 'w') Color.white else Color.black;
+
+        // Castling
+        var castling: u4 = 0;
+        for (fen.castling) |c| {
+            castling |= @enumToInt(switch (c) {
+                'K' => CanCastle.white_king,
+                'Q' => CanCastle.white_queen,
+                'k' => CanCastle.black_king,
+                'q' => CanCastle.black_queen,
+                else => CanCastle.invalid,
+            });
+            i += 1;
+        }
+
+        // En passant
+        i = 0;
+        var en_passant_target: u8 = 0;
+        if (fen.en_passant[i] != '-') {
+            const file = fen.en_passant[i] - 'a';
+            const rank = fen.en_passant[i + 1] - '0';
+
+            en_passant_target = rfToEx88(RankAndFile{
+                .file = file,
+                .rank = rank,
+            });
+        }
+        return Position{
+            .board = board_position,
+            .to_move = to_move,
+            .castling = castling,
+            .en_passant_target = en_passant_target,
+            .halfmove = @truncate(u8, fen.halfmove),
+            .fullmove = @truncate(u8, fen.fullmove),
+        };
 }
 
 // Convert a FEN piece code (e.g. p) to the 0x88 byte form

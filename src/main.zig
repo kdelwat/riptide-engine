@@ -116,7 +116,10 @@ fn handleCommand(input: []const u8, stdout: File, stderr: File) !void {
             startNewGame(start_position),
 
         UciCommandType.position =>
-            startNewGame(start_position),
+            engine_data = GlobalData{
+               .pos = position.fromFENStruct(c.position),
+               .best_move = 0,
+            },
     }
 }
 
