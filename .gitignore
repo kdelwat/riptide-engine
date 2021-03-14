@@ -1,4 +1,7 @@
 /.vscode
 /zig-cache
 /src/zig-cache
+/src/parse/zig-cache
 /.idea
+/libs/mecha/zig-cache
+/libs/zig-cache/bin
