@@ -7,15 +7,22 @@ pub const UciCommandType = enum {
     uci,
     isready,
     position_startpos,
-    position,
+    position, // TODO: moves
     ucinewgame,
     debug,
+    setoption,
+    // go
+    // stop
+    // quit
+    // ponderhit
+
 };
 
 const UciCommandUci = struct {};
 const UciCommandVoid = struct {};
 const UciCommandPositionStartpos = struct {};
 const UciCommandUciNewGame = struct {};
+
 
 pub const UciCommand = union(UciCommandType) {
     uci: UciCommandUci,
@@ -24,6 +31,7 @@ pub const UciCommand = union(UciCommandType) {
     position: Fen,
     ucinewgame: UciCommandUciNewGame,
     debug: bool,
+    setoption: []const u8,
 };
 
 // toUnion is based on toStruct from mecha, but takes in a union tag name and converts the parse result
@@ -57,16 +65,27 @@ pub fn toUnion(name: []const u8, comptime T: type) ToUnionResult(T) {
     }.func;
 }
 
+pub const uci_command = combine(.{oneOf(.{ p_isready, p_position, p_position_startpos, p_ucinewgame, p_uci, p_debug, p_setoption})});
+
 const p_uci = map(UciCommand, toUnion("uci", UciCommand), string("uci"));
 const p_isready = map(UciCommand, toUnion("isready", UciCommand), string("isready"));
 const p_position = map(UciCommand, toUnion("position", UciCommand), combine(.{string("position "), fen}));
 const p_position_startpos = map(UciCommand, toUnion("position_startpos", UciCommand), string("position startpos"));
 const p_ucinewgame = map(UciCommand, toUnion("ucinewgame", UciCommand), string("ucinewgame"));
 const p_debug = map(UciCommand, toUnion("debug", UciCommand), combine(.{string("debug "), boolean}));
+const p_setoption = map(UciCommand, toUnion("setoption", UciCommand), combine(.{string("setoption "), set_option}));
 
 const boolean = oneOf(.{parse_on, parse_off});
-
 const parse_on = map(bool, struct {fn f(_: anytype) bool {return true;}}.f, string("on"));
 const parse_off = map(bool, struct {fn f(_: anytype) bool {return false;}}.f, string("off"));
 
-pub const uci_command = combine(.{oneOf(.{ p_isready, p_position, p_position_startpos, p_ucinewgame, p_uci, p_debug})});
+const any_char = oneOf(.{discard(utf8.range('0', '9')), discard(utf8.range('a', 'z')), discard(utf8.range('A', 'Z')), utf8.char(' ')});
+
+const set_option = combine(
+    .{
+        string("name "),
+        asStr(many(any_char, .{.collect = false}))
+    }
+);
+
+const p: ParserResult(u8) = asStr(many(any_char, .{.collect = false}));

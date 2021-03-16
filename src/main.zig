@@ -122,6 +122,13 @@ fn handleCommand(input: []const u8, stdout: File, stderr: File) !void {
             },
         UciCommandType.debug => |enabled|
             debug_mode = enabled,
+
+        UciCommandType.setoption => |opt|
+            try stderr.writer().print(
+                "opt: input = {s}\n",
+                .{opt},
+            ),
+
     }
 }
 
