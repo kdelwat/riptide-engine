@@ -1,0 +1,33 @@
+const algebraic = @import("./parse/algebraic.zig");
+const fen = @import("./parse/fen.zig");
+
+pub const UciCommandType = enum {
+    uci,
+    isready,
+    position_startpos,
+    position, // TODO: moves
+    ucinewgame,
+    debug,
+    setoption,
+    // go
+    // stop
+    quit,
+    // ponderhit
+
+};
+
+pub const UciCommandPosition = struct {
+    fen: fen.Fen,
+    moves: []algebraic.LongAlgebraicMove,
+};
+
+pub const UciCommand = union(UciCommandType) {
+    uci: void,
+    isready: void,
+    position_startpos: []algebraic.LongAlgebraicMove,
+    position: UciCommandPosition,
+    ucinewgame: void,
+    debug: bool,
+    setoption: []const u8,
+    quit: void,
+};

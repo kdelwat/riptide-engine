@@ -1,9 +1,9 @@
 const std = @import("std");
 const File = std.fs.File;
 const position = @import("./position.zig");
-const uci = @import("./parse/uci.zig");
-const UciCommandType = uci.UciCommandType;
-const UciCommand = uci.UciCommand;
+const parse_uci = @import("./parse/uci.zig").uci_command;
+const uci = @import("./uci.zig");
+const UciCommandType = @import("./uci.zig").UciCommandType;
 const fen = @import("./parse/fen.zig");
 const start_position = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
@@ -94,7 +94,7 @@ pub fn main() anyerror!void {
 }
 
 fn handleCommand(input: []const u8, stdout: File, stderr: File) !bool {
-    const c: UciCommand = (try uci.uci_command(std.testing.allocator, input)).value;
+    const c: uci.UciCommand = (try parse_uci(std.testing.allocator, input)).value;
 
     switch (c) {
         UciCommandType.uci =>
