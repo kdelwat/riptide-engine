@@ -109,17 +109,25 @@ fn handleCommand(input: []const u8, stdout: File, stderr: File) !bool {
                 .{},
             ),
 
-        UciCommandType.position_startpos =>
-            startNewGame(start_position),
+        UciCommandType.position_startpos => |moves| {
+            startNewGame(start_position);
+        },
 
         UciCommandType.ucinewgame =>
             startNewGame(start_position),
 
-        UciCommandType.position =>
+        UciCommandType.position => |pos| {
+            try stderr.writer().print(
+                "moves = {}, moves.len = {}\n",
+                .{pos.moves, pos.moves.len},
+            );
+
             engine_data = GlobalData{
-               .pos = position.fromFENStruct(c.position),
+               .pos = position.fromFENStruct(pos.fen),
                .best_move = 0,
-            },
+            };
+        },
+
         UciCommandType.debug => |enabled|
             debug_mode = enabled,
 

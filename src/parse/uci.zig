@@ -2,6 +2,7 @@ const std = @import("std");
 usingnamespace @import("mecha");
 const Fen = @import("./fen.zig").Fen;
 const fen = @import("./fen.zig").fen;
+const algebraic = @import("./algebraic.zig");
 
 pub const UciCommandType = enum {
     uci,
@@ -18,11 +19,16 @@ pub const UciCommandType = enum {
 
 };
 
+pub const UciCommandPosition = struct {
+    fen: Fen,
+    moves: []algebraic.LongAlgebraicMove,
+};
+
 pub const UciCommand = union(UciCommandType) {
     uci: void,
     isready: void,
-    position_startpos: void,
-    position: Fen,
+    position_startpos: []algebraic.LongAlgebraicMove,
+    position: UciCommandPosition,
     ucinewgame: void,
     debug: bool,
     setoption: []const u8,
@@ -77,8 +83,11 @@ pub const uci_command = combine(
 
 const p_uci = map(UciCommand, toUnion("uci", UciCommand), string("uci"));
 const p_isready = map(UciCommand, toUnion("isready", UciCommand), string("isready"));
-const p_position = map(UciCommand, toUnion("position", UciCommand), combine(.{string("position "), fen}));
-const p_position_startpos = map(UciCommand, toUnion("position_startpos", UciCommand), string("position startpos"));
+
+const p_position = map(UciCommand, toUnion("position", UciCommand), combine(.{string("position "), map(UciCommandPosition, toStruct(UciCommandPosition), combine(.{fen, discard(opt(utf8.char(' '))), many(algebraic.long_algebraic_notation, .{.collect = true})}))}));
+
+const p_position_startpos = map(UciCommand, toUnion("position_startpos", UciCommand), combine(.{string("position startpos"), discard(opt(utf8.char(' '))), many(algebraic.long_algebraic_notation, .{.collect = true})}));
+
 const p_ucinewgame = map(UciCommand, toUnion("ucinewgame", UciCommand), string("ucinewgame"));
 const p_debug = map(UciCommand, toUnion("debug", UciCommand), combine(.{string("debug "), boolean}));
 const p_setoption = map(UciCommand, toUnion("setoption", UciCommand), combine(.{string("setoption "), set_option}));
