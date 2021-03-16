@@ -18,18 +18,12 @@ pub const UciCommandType = enum {
 
 };
 
-const UciCommandUci = struct {};
-const UciCommandVoid = struct {};
-const UciCommandPositionStartpos = struct {};
-const UciCommandUciNewGame = struct {};
-
-
 pub const UciCommand = union(UciCommandType) {
-    uci: UciCommandUci,
-    isready: UciCommandVoid,
-    position_startpos: UciCommandPositionStartpos,
+    uci: void,
+    isready: void,
+    position_startpos: void,
     position: Fen,
-    ucinewgame: UciCommandUciNewGame,
+    ucinewgame: void,
     debug: bool,
     setoption: []const u8,
     quit: void,
