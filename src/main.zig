@@ -89,11 +89,11 @@ pub fn main() anyerror!void {
             quit = true;
         }
 
-        try handleCommand(input, stdout, stderr);
+        quit = try handleCommand(input, stdout, stderr);
     }
 }
 
-fn handleCommand(input: []const u8, stdout: File, stderr: File) !void {
+fn handleCommand(input: []const u8, stdout: File, stderr: File) !bool {
     const c: UciCommand = (try uci.uci_command(std.testing.allocator, input)).value;
 
     switch (c) {
@@ -128,8 +128,11 @@ fn handleCommand(input: []const u8, stdout: File, stderr: File) !void {
                 "opt: input = {s}\n",
                 .{opt},
             ),
-
+        UciCommandType.quit =>
+            return true,
     }
+
+    return false;
 }
 
 fn startNewGame(pos: []const u8) void {

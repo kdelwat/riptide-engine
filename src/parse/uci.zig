@@ -13,7 +13,7 @@ pub const UciCommandType = enum {
     setoption,
     // go
     // stop
-    // quit
+    quit,
     // ponderhit
 
 };
@@ -32,6 +32,7 @@ pub const UciCommand = union(UciCommandType) {
     ucinewgame: UciCommandUciNewGame,
     debug: bool,
     setoption: []const u8,
+    quit: void,
 };
 
 // toUnion is based on toStruct from mecha, but takes in a union tag name and converts the parse result
@@ -65,7 +66,20 @@ pub fn toUnion(name: []const u8, comptime T: type) ToUnionResult(T) {
     }.func;
 }
 
-pub const uci_command = combine(.{oneOf(.{ p_isready, p_position, p_position_startpos, p_ucinewgame, p_uci, p_debug, p_setoption})});
+pub const uci_command = combine(
+    .{oneOf(
+        .{
+            p_isready,
+            p_position,
+            p_position_startpos,
+            p_ucinewgame,
+            p_uci,
+            p_debug,
+            p_setoption,
+            p_quit
+        }
+    )}
+);
 
 const p_uci = map(UciCommand, toUnion("uci", UciCommand), string("uci"));
 const p_isready = map(UciCommand, toUnion("isready", UciCommand), string("isready"));
@@ -74,6 +88,7 @@ const p_position_startpos = map(UciCommand, toUnion("position_startpos", UciComm
 const p_ucinewgame = map(UciCommand, toUnion("ucinewgame", UciCommand), string("ucinewgame"));
 const p_debug = map(UciCommand, toUnion("debug", UciCommand), combine(.{string("debug "), boolean}));
 const p_setoption = map(UciCommand, toUnion("setoption", UciCommand), combine(.{string("setoption "), set_option}));
+const p_quit = map(UciCommand, toUnion("quit", UciCommand), string("quit"));
 
 const boolean = oneOf(.{parse_on, parse_off});
 const parse_on = map(bool, struct {fn f(_: anytype) bool {return true;}}.f, string("on"));
