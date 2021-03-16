@@ -143,106 +143,11 @@ const CanCastle = enum(u4) {
     invalid     = 0,
 };
 
-pub fn fromFEN(fen: []const u8) Position {
-    // The FEN for the starting position looks like this:
-    //         rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
-    var i: u16 = 0;
-
-    // We need to convert the board string into a piece array. Due to the way
-    // FEN is structured, the first piece is at a8, which translates to 0x88
-    // index 112.
-    var board_position: [128]u8 = [_]u8{0} ** 128;
-    var board_index: u8 = 112;
-
-    while (true) {
-        // Skip the slashes which separate ranks
-        if (fen[i] == '/') {
-            i += 1;
-            continue;
-        }
-
-        // Numbers in the board string indicate empty spaces, so we advance the
-        // board index by that number of spaces since there aren't any pieces in
-        // those positions.
-        if (fen[i] >= '1' and fen[i] <= '8') {
-            board_index += fen[i] - '0';
-        } else {
-            // Otherwise, look up the correct piece code and insert it.
-            board_position[board_index] = fromFENCode(fen[i]);
-            board_index += 1;
-        }
-
-        if (board_index == 8) {
-            // Done
-            i += 1;
-            break;
-        }
-
-        // Skip squares that aren't on the board
-        if (board_index % 16 > 7) {
-            board_index = ((board_index / 16) - 1) * 16;
-        }
-
-        i += 1;
-    }
-
-    // Find the next player to move
-    i += 1;
-    const to_move = if (fen[i] == 'w') Color.white else Color.black;
-
-    i += 2;
-
-    // Castling
-    var castling: u4 = 0;
-
-    while (fen[i] != ' ') {
-        castling |= @enumToInt(switch (fen[i]) {
-            'K' => CanCastle.white_king,
-            'Q' => CanCastle.white_queen,
-            'k' => CanCastle.black_king,
-            'q' => CanCastle.black_queen,
-            else => CanCastle.invalid,
-        });
-        i += 1;
-    }
-
-    // En passant
-    i += 1;
-    var en_passant_target: u8 = 0;
-    if (fen[i] != '-') {
-        const file = fen[i] - 'a';
-        const rank = fen[i + 1] - '0';
-
-        en_passant_target = rfToEx88(RankAndFile{
-            .file = file,
-            .rank = rank,
-        });
-
-        i += 3;
-    } else {
-        i += 2;
-    }
-
-
-    // Halfmove
-    const halfmove_start = i;
-    while (fen[i] != ' ') {
-        i += 1;
-    }
-
-    const halfmove: u8 = std.fmt.parseInt(u8, fen[halfmove_start..i], 10) catch 0;
-
-    i += 1;
-
-    // Fullmove
-    const fullmove_start = i;
-    while (fen[i] != ' ' and i < fen.len) {
-        i += 1;
-    }
-
-    const fullmove: u8 = std.fmt.parseInt(u8, fen[fullmove_start..i], 10) catch 0;
-
-    return Position{.board = board_position, .to_move = to_move, .castling = castling, .en_passant_target = en_passant_target, .halfmove = halfmove, .fullmove = fullmove};
+pub fn fromFEN(fen: []const u8) !Position {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer { _ = gpa.deinit(); }
+    const f: Fen = (try parse_fen(&gpa.allocator, fen)).value;
+    return fromFENStruct(f);
 }
 
 pub fn fromFENStruct(fen: Fen) Position {

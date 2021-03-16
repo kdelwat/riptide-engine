@@ -5,9 +5,13 @@ const mem = std.mem;
 const position = @import("./position.zig");
 const Color = @import("./piece.zig").Color;
 
+fn fromFEN(f: []const u8) position.Position {
+    return position.fromFEN(f) catch unreachable;
+}
+
 test "fromFEN - empty board" {
     expect(
-        position.fromFEN("8/8/8/8/8/8/8/8 w KQkq - 0 1").eq(
+        fromFEN("8/8/8/8/8/8/8/8 w KQkq - 0 1").eq(
             position.Position{
                 .board = [_]u8{0} ** 128,
                 .to_move = Color.white,
@@ -22,7 +26,7 @@ test "fromFEN - empty board" {
 
 test "fromFEN - empty board with other data variety" {
     expect(
-        position.fromFEN("8/8/8/8/8/8/8/8 b Kq a6 36 113").eq(
+        fromFEN("8/8/8/8/8/8/8/8 b Kq a6 36 113").eq(
             position.Position{
                 .board = [_]u8{0} ** 128,
                 .to_move = Color.black,
@@ -37,7 +41,7 @@ test "fromFEN - empty board with other data variety" {
 
 test "fromFEN - bug" {
     expect(
-        position.fromFEN("8/8/8/8/8/8/8/8 b KQkq - 1 2").eq(
+        fromFEN("8/8/8/8/8/8/8/8 b KQkq - 1 2").eq(
             position.Position{
                 .board = [_]u8{0} ** 128,
                 .to_move = Color.black,
@@ -52,7 +56,7 @@ test "fromFEN - bug" {
 
 test "fromFEN - starting board" {
     expect(
-        position.fromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").eq(
+        fromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").eq(
             position.Position{
                 .board = [_]u8{
                      5,  2,  4,  7,  3,  4,  2,  5,   0, 0, 0, 0, 0, 0, 0, 0,

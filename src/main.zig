@@ -91,10 +91,7 @@ pub fn main() anyerror!void {
 }
 
 fn handleCommand(input: []const u8, stdout: File, stderr: File) !void {
-//    const f: fen.Fen = (try fen.fen(std.testing.allocator, input)).value;
-     const c: UciCommand = (try uci.uci_command(std.testing.allocator, input)).value;
-
-    std.debug.print("parsed: {}", .{c});
+    const c: UciCommand = (try uci.uci_command(std.testing.allocator, input)).value;
 
     switch (c) {
         UciCommandType.uci =>

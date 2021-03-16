@@ -30,4 +30,32 @@ pub fn build(b: *Builder) void {
 
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
+
+    const test_files: [5][]const u8 = [_][]const u8{
+        "src/attack_test.zig",
+        "src/evaluate_test.zig",
+        "src/make_move_test.zig",
+        "src/movegen_test.zig",
+        "src/position_test.zig"
+    };
+
+    const test_step = b.step("test", "Run all tests");
+
+    for (test_files) |test_file| {
+        const test_target = b.addTest(test_file);
+        test_target.addPackage(.{
+            .name = "mecha",
+            .path = "libs/mecha/mecha.zig",
+        });
+        test_step.dependOn(&test_target.step);
+    }
+
+    const perft_test_target = b.addTest("src/perft_test.zig");
+    perft_test_target.addPackage(.{
+        .name = "mecha",
+        .path = "libs/mecha/mecha.zig",
+    });
+    const perft_test_step = b.step("perft", "Run perft move generation tests (slow)");
+    perft_test_step.dependOn(&perft_test_target.step);
+
 }
