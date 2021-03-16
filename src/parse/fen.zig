@@ -30,7 +30,6 @@ const board = asStr(combine(.{rank, slash, rank, slash, rank, slash, rank, slash
 const rank = many(board_char, .{.min = 1, .max = 8, .collect = false});
 const slash = utf8.char('/');
 
-
 const board_char = oneOf(.{
     discard(utf8.range('1', '8')),
     utf8.char('r'),

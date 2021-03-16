@@ -24,6 +24,9 @@ const SearchMode = enum {
     movetime,
 };
 
+// Whether or not debug mode has been requested by the client
+var debug_mode: bool = false;
+
 // Store the global options set via Universal Chess Interface commands for the
 // engine to follow during runtime.
 const AnalysisOptions = struct {
@@ -117,12 +120,14 @@ fn handleCommand(input: []const u8, stdout: File, stderr: File) !void {
                .pos = position.fromFENStruct(c.position),
                .best_move = 0,
             },
+        UciCommandType.debug => |enabled|
+            debug_mode = enabled,
     }
 }
 
 fn startNewGame(pos: []const u8) void {
     engine_data = GlobalData{
-       .pos = position.fromFEN(start_position),
+       .pos = position.fromFEN(start_position) catch unreachable,
        .best_move = 0,
     };
 }

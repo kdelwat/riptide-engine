@@ -9,6 +9,7 @@ pub const UciCommandType = enum {
     position_startpos,
     position,
     ucinewgame,
+    debug,
 };
 
 const UciCommandUci = struct {};
@@ -22,6 +23,7 @@ pub const UciCommand = union(UciCommandType) {
     position_startpos: UciCommandPositionStartpos,
     position: Fen,
     ucinewgame: UciCommandUciNewGame,
+    debug: bool,
 };
 
 // toUnion is based on toStruct from mecha, but takes in a union tag name and converts the parse result
@@ -46,9 +48,6 @@ pub fn toUnion(name: []const u8, comptime T: type) ToUnionResult(T) {
                 @compileError("union does not have field " ++ name);
             };
 
-
-            const struct_fields = @typeInfo(struct_type).Struct.fields;
-
             if (@TypeOf(tuple) == void) {
                 return @unionInit(UciCommand, name, .{});
             }
@@ -63,5 +62,11 @@ const p_isready = map(UciCommand, toUnion("isready", UciCommand), string("isread
 const p_position = map(UciCommand, toUnion("position", UciCommand), combine(.{string("position "), fen}));
 const p_position_startpos = map(UciCommand, toUnion("position_startpos", UciCommand), string("position startpos"));
 const p_ucinewgame = map(UciCommand, toUnion("ucinewgame", UciCommand), string("ucinewgame"));
+const p_debug = map(UciCommand, toUnion("debug", UciCommand), combine(.{string("debug "), boolean}));
 
-pub const uci_command = combine(.{oneOf(.{ p_isready, p_position, p_position_startpos, p_ucinewgame, p_uci})});
+const boolean = oneOf(.{parse_on, parse_off});
+
+const parse_on = map(bool, struct {fn f(_: anytype) bool {return true;}}.f, string("on"));
+const parse_off = map(bool, struct {fn f(_: anytype) bool {return false;}}.f, string("off"));
+
+pub const uci_command = combine(.{oneOf(.{ p_isready, p_position, p_position_startpos, p_ucinewgame, p_uci, p_debug})});
