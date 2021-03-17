@@ -8,6 +8,10 @@ const UciCommandType = @import("./uci.zig").UciCommandType;
 const GoOption = @import("./uci.zig").GoOption;
 const GoOptionType = @import("./uci.zig").GoOptionType;
 const fen = @import("./parse/fen.zig");
+const move = @import("./move.zig");
+const search = @import("./search.zig");
+const Allocator = std.mem.Allocator;
+
 const start_position = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 // Store the current position and current best move of the engine, used globally
@@ -75,9 +79,16 @@ fn nextLine(reader: anytype, buffer: []u8) !?[]const u8 {
 }
 
 pub fn main() anyerror!void {
+    // Get file descriptors for IO
     const stdout = std.io.getStdOut();
     const stderr = std.io.getStdErr();
     const stdin = std.io.getStdIn();
+
+    // Set up allocator with default options
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer {
+        _ = gpa.deinit();
+    }
 
     var quit: bool = false;
 
@@ -94,14 +105,14 @@ pub fn main() anyerror!void {
             quit = true;
         }
 
-        quit = try handleCommand(input, stdout, stderr);
+        quit = try handleCommand(input, stdout, stderr, &gpa.allocator);
     }
 }
 
-fn handleCommand(input: []const u8, stdout: File, stderr: File) !bool {
-    const c: uci.UciCommand = (try parse_uci(std.testing.allocator, input)).value;
+fn handleCommand(input: []const u8, stdout: File, stderr: File, a: *Allocator) !bool {
+    const c: uci.UciCommand = (try parse_uci(a, input)).value;
 
-    switch (c) {
+    try switch (c) {
         UciCommandType.uci =>
             try stdout.writer().print(
                 "id name Riptide\nid author Cadel Watson\nuciok\n",
@@ -146,10 +157,10 @@ fn handleCommand(input: []const u8, stdout: File, stderr: File) !bool {
         UciCommandType.ponderhit =>
             return false,
         UciCommandType.go => |options|
-            startAnalysis(options),
+            startAnalysis(options, stdout, a),
         UciCommandType.stop =>
             return false,
-    }
+    };
 
     return false;
 }
@@ -161,7 +172,7 @@ fn startNewGame(pos: []const u8) void {
     };
 }
 
-fn startAnalysis(options: []GoOption) void {
+fn startAnalysis(options: []GoOption, stdout: File, a: *Allocator) !void {
     var default_search_moves: []const algebraic.LongAlgebraicMove = ([_]algebraic.LongAlgebraicMove{})[0..];
     var opts: AnalysisOptions = .{
         .search_mode = SearchMode.infinite,
@@ -227,7 +238,26 @@ fn startAnalysis(options: []GoOption) void {
 
             GoOptionType.searchmoves => |searchmoves|
                 opts.search_moves = searchmoves,
+        }
 
+        switch(opts.search_mode) {
+            SearchMode.depth =>
+                {
+                    const best_move = search.search(&engine_data.pos, opts.depth, -100000, 100000, a);
+                    try sendBestMove(best_move, stdout);
+                },
+            SearchMode.mate => {},
+            SearchMode.ponder => {},
+            SearchMode.movetime => {},
+            SearchMode.nodes => {},
+            SearchMode.infinite => {},
         }
     }
+}
+
+fn sendBestMove(m: u32, stdout: File) !void {
+    try stdout.writer().print(
+        "bestmove {}\n",
+        .{try move.toLongAlgebraic(m)},
+    );
 }

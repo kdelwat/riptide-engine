@@ -1,5 +1,6 @@
 const piece = @import("./piece.zig");
 const PieceType = piece.PieceType;
+const std = @import("std");
 
 // A move is encoded as a 32-bit integer.
 //
@@ -101,6 +102,14 @@ pub fn toIndex(m: u32) u8 {
 // move, as in the above table.
 const PROMOTION_MASK = 0x3 << 16;
 pub fn getPromotedPiece(m: u32, piece_promoted: u8) u8 {
+    var new_piece: u8 = getPromotedPieceColorblind(m);
+
+    new_piece |= @enumToInt(piece.pieceColor(piece_promoted));
+
+    return new_piece;
+}
+
+pub fn getPromotedPieceColorblind(m: u32) u8 {
     var new_piece: u8 = 0;
 
     switch (m & PROMOTION_MASK) {
@@ -110,8 +119,6 @@ pub fn getPromotedPiece(m: u32, piece_promoted: u8) u8 {
         ROOK_PROMOTION => new_piece |= @enumToInt(PieceType.rook),
         else => unreachable,
     }
-
-    new_piece |= @enumToInt(piece.pieceColor(piece_promoted));
 
     return new_piece;
 }
@@ -161,4 +168,46 @@ pub fn isDoublePawnPush(m: u32) bool {
 // Is the move an en passant capture?
 pub fn isEnPassantCapture(m: u32) bool {
     return isCapture(m) and (m & EN_PASSANT != 0);
+}
+
+pub fn toLongAlgebraic(m: u32) ![]const u8 {
+    var ret: [5]u8 = undefined;
+
+    const to = toIndex(m);
+    const from = fromIndex(m);
+    const to_rank = to / 16 + 1;
+    const to_file = (to % 16) + 'a';
+    const from_rank = from / 16 + 1;
+    const from_file = (from % 16) + 'a';
+
+    if (isPromotion(m) or isPromotionCapture(m)) {
+        const promotion_piece = getPromotedPieceColorblind(m);
+
+        return try std.fmt.bufPrint(
+            ret[0..],
+            "{c}{d}{c}{d}{c}",
+            .{from_file, from_rank, to_file, to_rank, pieceToCharColorblind(promotion_piece)},
+        );
+    }
+
+    return try std.fmt.bufPrint(
+        ret[0..],
+        "{c}{d}{c}{d}",
+        .{from_file, from_rank, to_file, to_rank},
+    );
+}
+
+// Converts a piece to a FEN char.
+fn pieceToCharColorblind(p: u8) u8 {
+    var code: u8 = switch (piece.pieceType(p)) {
+        PieceType.king => 'k',
+        PieceType.queen => 'q',
+        PieceType.rook => 'r',
+        PieceType.bishop => 'b',
+        PieceType.knight => 'n',
+        PieceType.pawn => 'p',
+        else => '_',
+    };
+
+    return code;
 }
