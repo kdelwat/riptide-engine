@@ -3,7 +3,10 @@ const File = std.fs.File;
 const position = @import("./position.zig");
 const parse_uci = @import("./parse/uci.zig").uci_command;
 const uci = @import("./uci.zig");
+const algebraic = @import("./parse/algebraic.zig");
 const UciCommandType = @import("./uci.zig").UciCommandType;
+const GoOption = @import("./uci.zig").GoOption;
+const GoOptionType = @import("./uci.zig").GoOptionType;
 const fen = @import("./parse/fen.zig");
 const start_position = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
@@ -22,6 +25,8 @@ const SearchMode = enum {
     depth,
     nodes,
     movetime,
+    ponder,
+    mate,
 };
 
 // Whether or not debug mode has been requested by the client
@@ -32,8 +37,8 @@ var debug_mode: bool = false;
 const AnalysisOptions = struct {
     search_mode: SearchMode,
 
-    // searchMoves is a list of moves to consider when searching, to the exclusion of others
-    searchMoves: []u32,
+    // search_moves is a list of moves to consider when searching, to the exclusion of others
+    search_moves: []const algebraic.LongAlgebraicMove,
 
     // ponder places the engine in ponder mode, which searches for the next move during
     // the opponent's turn.
@@ -41,10 +46,10 @@ const AnalysisOptions = struct {
 
     // wtime and btime control the amount of time each player has in the game. winc and
     // binc determine the time increment added to each player after each move.
-    wtime: i64,
-    btime: i64,
-    winc: i64,
-    binc: i64,
+    wtime: u64,
+    btime: u64,
+    winc: u64,
+    binc: u64,
 
     // depth, nodes, movesToMate, and movetime provide the options for the search
     // algorithm chosen.
@@ -141,10 +146,7 @@ fn handleCommand(input: []const u8, stdout: File, stderr: File) !bool {
         UciCommandType.ponderhit =>
             return false,
         UciCommandType.go => |options|
-            try stderr.writer().print(
-                "go: options = {}\n",
-                .{options.len},
-            ),
+            startAnalysis(options),
         UciCommandType.stop =>
             return false,
     }
@@ -157,4 +159,75 @@ fn startNewGame(pos: []const u8) void {
        .pos = position.fromFEN(start_position) catch unreachable,
        .best_move = 0,
     };
+}
+
+fn startAnalysis(options: []GoOption) void {
+    var default_search_moves: []const algebraic.LongAlgebraicMove = ([_]algebraic.LongAlgebraicMove{})[0..];
+    var opts: AnalysisOptions = .{
+        .search_mode = SearchMode.infinite,
+        .search_moves = default_search_moves,
+        .ponder = false,
+        .wtime = 0,
+        .btime = 0,
+        .winc = 0,
+        .binc = 0,
+        .movestogo = 0,
+        .depth = 0,
+        .nodes = 0,
+        .moves_to_mate = 0,
+        .movetime = 0,
+    };
+
+    for (options) |option| {
+        switch (option) {
+            GoOptionType.infinite =>
+                opts.search_mode = SearchMode.infinite,
+
+            GoOptionType.ponder =>
+                opts.search_mode = SearchMode.ponder,
+
+            GoOptionType.nodes => |nodes|
+                {
+                    opts.search_mode = SearchMode.nodes;
+                    opts.nodes = nodes;
+                },
+
+            GoOptionType.depth => |depth|
+                {
+                    opts.search_mode = SearchMode.depth;
+                    opts.depth = depth;
+                },
+
+            GoOptionType.mate => |mate|
+                {
+                    opts.search_mode = SearchMode.mate;
+                    opts.moves_to_mate = mate;
+                },
+
+            GoOptionType.movetime => |movetime|
+                {
+                    opts.search_mode = SearchMode.movetime;
+                    opts.movetime = movetime;
+                },
+
+            GoOptionType.wtime => |wtime|
+                opts.wtime = wtime,
+
+            GoOptionType.btime => |btime|
+                opts.btime = btime,
+                
+            GoOptionType.winc => |winc|
+                opts.winc = winc,
+                
+            GoOptionType.binc => |binc|
+                opts.binc = binc,
+
+            GoOptionType.movestogo => |movestogo|
+                opts.movestogo = movestogo,
+
+            GoOptionType.searchmoves => |searchmoves|
+                opts.search_moves = searchmoves,
+
+        }
+    }
 }
