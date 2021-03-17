@@ -5,15 +5,14 @@ pub const UciCommandType = enum {
     uci,
     isready,
     position_startpos,
-    position, // TODO: moves
+    position,
     ucinewgame,
     debug,
     setoption,
     // go
-    // stop
+    stop,
     quit,
-    // ponderhit
-
+    ponderhit,
 };
 
 pub const UciCommandPosition = struct {
@@ -35,4 +34,6 @@ pub const UciCommand = union(UciCommandType) {
     debug: bool,
     setoption: UciCommandSetOption,
     quit: void,
+    stop: void,
+    ponderhit: void,
 };

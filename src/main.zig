@@ -138,6 +138,10 @@ fn handleCommand(input: []const u8, stdout: File, stderr: File) !bool {
             ),
         UciCommandType.quit =>
             return true,
+        UciCommandType.ponderhit =>
+            return false,
+        UciCommandType.stop =>
+            return false,
     }
 
     return false;

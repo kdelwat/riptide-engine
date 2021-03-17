@@ -8,6 +8,8 @@ const p_uci = @import("./uci/uci.zig").p_uci;
 const p_debug = @import("./uci/debug.zig").p_debug;
 const p_setoption = @import("./uci/setoption.zig").p_setoption;
 const p_quit = @import("./uci/quit.zig").p_quit;
+const p_stop = @import("./uci/stop.zig").p_stop;
+const p_ponderhit = @import("./uci/ponderhit.zig").p_ponderhit;
 
 pub const uci_command = combine(
     .{oneOf(
@@ -19,7 +21,9 @@ pub const uci_command = combine(
             p_uci,
             p_debug,
             p_setoption,
-            p_quit
+            p_quit,
+            p_stop,
+            p_ponderhit,
         }
     )}
 );
