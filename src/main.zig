@@ -140,6 +140,11 @@ fn handleCommand(input: []const u8, stdout: File, stderr: File) !bool {
             return true,
         UciCommandType.ponderhit =>
             return false,
+        UciCommandType.go => |options|
+            try stderr.writer().print(
+                "go: options = {}\n",
+                .{options.len},
+            ),
         UciCommandType.stop =>
             return false,
     }

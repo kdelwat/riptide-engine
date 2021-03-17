@@ -9,7 +9,7 @@ pub const UciCommandType = enum {
     ucinewgame,
     debug,
     setoption,
-    // go
+    go,
     stop,
     quit,
     ponderhit,
@@ -34,6 +34,37 @@ pub const UciCommand = union(UciCommandType) {
     debug: bool,
     setoption: UciCommandSetOption,
     quit: void,
+    go: []GoOption,
     stop: void,
     ponderhit: void,
+};
+
+pub const GoOptionType = enum {
+    infinite,
+    ponder,
+    wtime,
+    btime,
+    winc,
+    binc,
+    movestogo,
+    depth,
+    nodes,
+    mate,
+    movetime,
+    searchmoves,
+};
+
+pub const GoOption = union(GoOptionType) {
+    infinite: void,
+    ponder: void,
+    wtime: u64,
+    btime: u64,
+    winc: u64,
+    binc: u64,
+    movestogo: u64,
+    depth: u64,
+    nodes: u64,
+    mate: u64,
+    movetime: u64,
+    searchmoves: []algebraic.LongAlgebraicMove,
 };
