@@ -21,6 +21,11 @@ pub const UciCommandPosition = struct {
     moves: []algebraic.LongAlgebraicMove,
 };
 
+pub const UciCommandSetOption = struct {
+    name: []const u8,
+    value: ?[]const u8,
+};
+
 pub const UciCommand = union(UciCommandType) {
     uci: void,
     isready: void,
@@ -28,6 +33,6 @@ pub const UciCommand = union(UciCommandType) {
     position: UciCommandPosition,
     ucinewgame: void,
     debug: bool,
-    setoption: []const u8,
+    setoption: UciCommandSetOption,
     quit: void,
 };
