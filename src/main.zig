@@ -10,6 +10,7 @@ const GoOptionType = @import("./uci.zig").GoOptionType;
 const fen = @import("./parse/fen.zig");
 const move = @import("./move.zig");
 const search = @import("./search.zig");
+const worker = @import("./worker.zig");
 const Allocator = std.mem.Allocator;
 
 const start_position = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -35,9 +36,6 @@ const SearchMode = enum {
 
 // Whether or not debug mode has been requested by the client
 var debug_mode: bool = false;
-
-// Used to signal search thread that it should exit
-var cancel_search: bool = false;
 
 // Store the global options set via Universal Chess Interface commands for the
 // engine to follow during runtime.
@@ -135,6 +133,12 @@ fn handleCommand(input: []const u8, stdout: File, stderr: File, a: *Allocator) !
             },
 
         UciCommandType.isready => {
+            // Spin until ready
+            while (true) {
+                if (worker.isReady()) {
+                    break;
+                }
+            }
             try stderr.writer().print(
                 "<== readyok\n",
                 .{},
@@ -143,7 +147,7 @@ fn handleCommand(input: []const u8, stdout: File, stderr: File, a: *Allocator) !
                 "readyok\n",
                 .{},
             );
-            },
+        },
 
         UciCommandType.position_startpos => |moves| {
             startNewGame(start_position);
@@ -254,7 +258,8 @@ fn startAnalysis(options: []GoOption, stdout: File, stderr: File, a: *Allocator)
         switch(opts.search_mode) {
             SearchMode.depth =>
                 {
-                    const best_move = search.search(&engine_data.pos, opts.depth, -100000, 100000, a);
+                    var should_cancel: bool = false;
+                    const best_move = search.search(&engine_data.pos, opts.depth, -100000, 100000, &should_cancel, a);
                     try sendBestMove(best_move, stdout, stderr);
                 },
             SearchMode.mate => {},
@@ -264,26 +269,19 @@ fn startAnalysis(options: []GoOption, stdout: File, stderr: File, a: *Allocator)
             },
             SearchMode.nodes => {},
             SearchMode.infinite => {
-                const ctx = search.InfiniteSearchContext{
-                    .pos = &engine_data.pos,
-                    .best_move = &engine_data.best_move,
-                    .cancelled = &cancel_search,
-                    .a = a,
-                    .stderr = stderr,
-                };
-
-                _ = try std.Thread.spawn(ctx, search.searchInfinite);
+                _ = try worker.start(&engine_data.pos, &engine_data.best_move, stderr, a);
             },
         }
     }
 }
 
 fn stopAnalysis(stdout: File, stderr: File) !void {
-    // Cancel threads which are currently searching
-    cancel_search = true;
+    try worker.stop();
 
     // Send the best move found so far
     try sendBestMove(engine_data.best_move, stdout, stderr);
+
+    engine_data.best_move = move.NULL_MOVE;
 }
 
 fn sendBestMove(m: u32, stdout: File, stderr: File) !void {

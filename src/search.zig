@@ -7,6 +7,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 const File = std.fs.File;
+const Timer = std.time.Timer;
 
 // Runs a search for the best move.
 // searchInfinite uses iterative deepening. It will search to a progressively greater
@@ -26,26 +27,27 @@ pub fn searchInfinite(context: InfiniteSearchContext) !void {
     var depth: u64 = 0;
 
     try context.stderr.writer().print(
-                    "??? search thread started\n",
-                    .{},
+        "??? [SEARCH] thread started\n",
+        .{},
     );
 
+    var timer = try Timer.start();
     while(true) {
         try context.stderr.writer().print(
-            "??? starting search of depth = {}\n",
+            "??? [SEARCH] searching: depth = {}\n",
             .{depth},
         );
 
-        const result = search(context.pos, depth, alpha, beta, context.a);
+        const result = search(context.pos, depth, alpha, beta, context.cancelled, context.a);
 
         try context.stderr.writer().print(
-            "??? finished search of depth = {}, move = {} \n",
-            .{depth, result},
+            "??? [SEARCH] search complete: depth = {}, best move = {}, duration = {}\n",
+            .{depth, result, timer.lap() / std.time.ns_per_ms},
         );
 
         if (context.cancelled.*) {
             try context.stderr.writer().print(
-                "??? cancelling thread\n",
+                "??? [SEARCH] thread cancelled\n",
                 .{},
             );
 
@@ -59,7 +61,7 @@ pub fn searchInfinite(context: InfiniteSearchContext) !void {
 }
 
 // Search for the best move for a position, to a given depth.
-pub fn search(pos: *position.Position, depth: u64, alpha: i64, beta: i64, a: *Allocator) u32 {
+pub fn search(pos: *position.Position, depth: u64, alpha: i64, beta: i64, should_cancel: *bool, a: *Allocator) u32 {
     // Generate all legal moves for the current position.
     var moves = ArrayList(u32).init(a);
     defer moves.deinit();
@@ -71,6 +73,10 @@ pub fn search(pos: *position.Position, depth: u64, alpha: i64, beta: i64, a: *Al
     // For each move available, run a search of its tree to the given depth, to
     // identify the best outcome.
     for (moves.items) |m| {
+        if (should_cancel.*) {
+            break;
+        }
+
         if (m == move.NULL_MOVE) {
             // Not a legal move
             continue;
