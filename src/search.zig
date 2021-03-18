@@ -6,7 +6,57 @@ const evaluate = @import("./evaluate.zig");
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
+const File = std.fs.File;
 
+// Runs a search for the best move.
+// searchInfinite uses iterative deepening. It will search to a progressively greater
+// depth, returning each best move until it is signalled to stop.
+pub const InfiniteSearchContext = struct {
+    pos: *position.Position,
+    best_move: *u32,
+    cancelled: *bool,
+    a: *Allocator,
+    stderr: File,
+};
+
+pub fn searchInfinite(context: InfiniteSearchContext) !void {
+    const alpha: i64 = -100000;
+    const beta: i64 = 100000;
+
+    var depth: u64 = 0;
+
+    try context.stderr.writer().print(
+                    "??? search thread started\n",
+                    .{},
+    );
+
+    while(true) {
+        try context.stderr.writer().print(
+            "??? starting search of depth = {}\n",
+            .{depth},
+        );
+
+        const result = search(context.pos, depth, alpha, beta, context.a);
+
+        try context.stderr.writer().print(
+            "??? finished search of depth = {}, move = {} \n",
+            .{depth, result},
+        );
+
+        if (context.cancelled.*) {
+            try context.stderr.writer().print(
+                "??? cancelling thread\n",
+                .{},
+            );
+
+            break;
+        }
+
+        context.best_move.* = result;
+
+        depth += 1;
+    }
+}
 
 // Search for the best move for a position, to a given depth.
 pub fn search(pos: *position.Position, depth: u64, alpha: i64, beta: i64, a: *Allocator) u32 {

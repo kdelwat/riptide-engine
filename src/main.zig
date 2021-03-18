@@ -36,6 +36,9 @@ const SearchMode = enum {
 // Whether or not debug mode has been requested by the client
 var debug_mode: bool = false;
 
+// Used to signal search thread that it should exit
+var cancel_search: bool = false;
+
 // Store the global options set via Universal Chess Interface commands for the
 // engine to follow during runtime.
 const AnalysisOptions = struct {
@@ -167,7 +170,7 @@ fn handleCommand(input: []const u8, stdout: File, stderr: File, a: *Allocator) !
         UciCommandType.go => |options|
             startAnalysis(options, stdout, stderr, a),
         UciCommandType.stop =>
-            return false,
+            stopAnalysis(stdout, stderr),
     };
 
     return false;
@@ -256,11 +259,31 @@ fn startAnalysis(options: []GoOption, stdout: File, stderr: File, a: *Allocator)
                 },
             SearchMode.mate => {},
             SearchMode.ponder => {},
-            SearchMode.movetime => {},
+            SearchMode.movetime => {
+
+            },
             SearchMode.nodes => {},
-            SearchMode.infinite => {},
+            SearchMode.infinite => {
+                const ctx = search.InfiniteSearchContext{
+                    .pos = &engine_data.pos,
+                    .best_move = &engine_data.best_move,
+                    .cancelled = &cancel_search,
+                    .a = a,
+                    .stderr = stderr,
+                };
+
+                _ = try std.Thread.spawn(ctx, search.searchInfinite);
+            },
         }
     }
+}
+
+fn stopAnalysis(stdout: File, stderr: File) !void {
+    // Cancel threads which are currently searching
+    cancel_search = true;
+
+    // Send the best move found so far
+    try sendBestMove(engine_data.best_move, stdout, stderr);
 }
 
 fn sendBestMove(m: u32, stdout: File, stderr: File) !void {
