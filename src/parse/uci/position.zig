@@ -9,7 +9,7 @@ pub const p_position = map(
     UciCommand,
     toUnion("position", UciCommand),
     combine(.{
-        string("position "),
+        string("position fen "),
         map(UciCommandPosition, toStruct(UciCommandPosition), combine(.{
             fen,
             discard(opt(utf8.char(' '))),

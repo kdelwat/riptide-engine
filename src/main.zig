@@ -84,6 +84,13 @@ pub fn main() anyerror!void {
     const stderr = std.io.getStdErr();
     const stdin = std.io.getStdIn();
 
+    const logfile = try std.fs.createFileAbsolute(
+        "C:/Users/cadel/Documents/Chess/riptide/riptide_logs.txt",
+        .{ .read = true },
+    );
+    defer logfile.close();
+
+
     // Set up allocator with default options
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer {
@@ -96,8 +103,8 @@ pub fn main() anyerror!void {
 
     while (!quit) {
         const input = (try nextLine(stdin.reader(), &buffer)).?;
-        try stderr.writer().print(
-            "Command: \"{s}\"\n",
+        try logfile.writer().print(
+            "==> \"{s}\"\n",
             .{input},
         );
 
@@ -105,7 +112,7 @@ pub fn main() anyerror!void {
             quit = true;
         }
 
-        quit = try handleCommand(input, stdout, stderr, &gpa.allocator);
+        quit = try handleCommand(input, stdout, logfile, &gpa.allocator);
     }
 }
 
@@ -113,17 +120,27 @@ fn handleCommand(input: []const u8, stdout: File, stderr: File, a: *Allocator) !
     const c: uci.UciCommand = (try parse_uci(a, input)).value;
 
     try switch (c) {
-        UciCommandType.uci =>
+        UciCommandType.uci => {
+            try stderr.writer().print(
+                "<== id name Riptide\nid author Cadel Watson\nuciok\n",
+                .{},
+            );
             try stdout.writer().print(
                 "id name Riptide\nid author Cadel Watson\nuciok\n",
                 .{},
-            ),
+            );
+            },
 
-        UciCommandType.isready =>
+        UciCommandType.isready => {
+            try stderr.writer().print(
+                "<== readyok\n",
+                .{},
+            );
             try stdout.writer().print(
                 "readyok\n",
                 .{},
-            ),
+            );
+            },
 
         UciCommandType.position_startpos => |moves| {
             startNewGame(start_position);
@@ -133,11 +150,6 @@ fn handleCommand(input: []const u8, stdout: File, stderr: File, a: *Allocator) !
             startNewGame(start_position),
 
         UciCommandType.position => |pos| {
-            try stderr.writer().print(
-                "moves = {}, moves.len = {}\n",
-                .{pos.moves, pos.moves.len},
-            );
-
             engine_data = GlobalData{
                .pos = position.fromFENStruct(pos.fen),
                .best_move = 0,
@@ -146,18 +158,14 @@ fn handleCommand(input: []const u8, stdout: File, stderr: File, a: *Allocator) !
 
         UciCommandType.debug => |enabled|
             debug_mode = enabled,
-
         UciCommandType.setoption => |opt|
-            try stderr.writer().print(
-                "opt: input = {s}\n",
-                .{opt},
-            ),
+            return false,
         UciCommandType.quit =>
             return true,
         UciCommandType.ponderhit =>
             return false,
         UciCommandType.go => |options|
-            startAnalysis(options, stdout, a),
+            startAnalysis(options, stdout, stderr, a),
         UciCommandType.stop =>
             return false,
     };
@@ -172,7 +180,7 @@ fn startNewGame(pos: []const u8) void {
     };
 }
 
-fn startAnalysis(options: []GoOption, stdout: File, a: *Allocator) !void {
+fn startAnalysis(options: []GoOption, stdout: File, stderr: File, a: *Allocator) !void {
     var default_search_moves: []const algebraic.LongAlgebraicMove = ([_]algebraic.LongAlgebraicMove{})[0..];
     var opts: AnalysisOptions = .{
         .search_mode = SearchMode.infinite,
@@ -244,7 +252,7 @@ fn startAnalysis(options: []GoOption, stdout: File, a: *Allocator) !void {
             SearchMode.depth =>
                 {
                     const best_move = search.search(&engine_data.pos, opts.depth, -100000, 100000, a);
-                    try sendBestMove(best_move, stdout);
+                    try sendBestMove(best_move, stdout, stderr);
                 },
             SearchMode.mate => {},
             SearchMode.ponder => {},
@@ -255,7 +263,11 @@ fn startAnalysis(options: []GoOption, stdout: File, a: *Allocator) !void {
     }
 }
 
-fn sendBestMove(m: u32, stdout: File) !void {
+fn sendBestMove(m: u32, stdout: File, stderr: File) !void {
+    try stderr.writer().print(
+        "<== bestmove {}\n",
+        .{try move.toLongAlgebraic(m)},
+    );
     try stdout.writer().print(
         "bestmove {}\n",
         .{try move.toLongAlgebraic(m)},

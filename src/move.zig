@@ -117,7 +117,7 @@ pub fn getPromotedPieceColorblind(m: u32) u8 {
         KNIGHT_PROMOTION => new_piece |= @enumToInt(PieceType.knight),
         QUEEN_PROMOTION => new_piece |= @enumToInt(PieceType.queen),
         ROOK_PROMOTION => new_piece |= @enumToInt(PieceType.rook),
-        else => unreachable,
+        else => {},
     }
 
     return new_piece;
