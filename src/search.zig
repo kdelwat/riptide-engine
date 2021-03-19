@@ -3,11 +3,13 @@ const movegen = @import("./movegen.zig");
 const make_move = @import("./make_move.zig");
 const move = @import("./move.zig");
 const evaluate = @import("./evaluate.zig");
+const debug = @import("./debug.zig");
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 const File = std.fs.File;
 const Timer = std.time.Timer;
+const Logger = @import("./logger.zig").Logger;
 
 // Runs a search for the best move.
 // searchInfinite uses iterative deepening. It will search to a progressively greater
@@ -15,9 +17,13 @@ const Timer = std.time.Timer;
 pub const InfiniteSearchContext = struct {
     pos: *position.Position,
     best_move: *u32,
+    thread_ctx: SearchContext,
+};
+
+pub const SearchContext = struct {
     cancelled: *bool,
     a: *Allocator,
-    stderr: File,
+    logger: Logger,
 };
 
 pub fn searchInfinite(context: InfiniteSearchContext) !void {
@@ -26,31 +32,20 @@ pub fn searchInfinite(context: InfiniteSearchContext) !void {
 
     var depth: u64 = 0;
 
-    try context.stderr.writer().print(
-        "??? [SEARCH] thread started\n",
-        .{},
-    );
+    try context.thread_ctx.logger.log("SEARCH", "thread started", .{});
 
     var timer = try Timer.start();
     while(true) {
-        try context.stderr.writer().print(
-            "??? [SEARCH] searching: depth = {}\n",
-            .{depth},
-        );
+        try context.thread_ctx.logger.log("SEARCH", "searching: depth = {}", .{depth});
 
-        const result = search(context.pos, depth, alpha, beta, context.cancelled, context.a);
+        const result = search(context.pos, depth, alpha, beta, context.thread_ctx);
 
-        try context.stderr.writer().print(
-            "??? [SEARCH] search complete: depth = {}, best move = {}, duration = {}\n",
+        try context.thread_ctx.logger.log("SEARCH", "complete: depth = {}, best move = {}, duration = {}",
             .{depth, result, timer.lap() / std.time.ns_per_ms},
         );
 
-        if (context.cancelled.*) {
-            try context.stderr.writer().print(
-                "??? [SEARCH] thread cancelled\n",
-                .{},
-            );
-
+        if (context.thread_ctx.cancelled.*) {
+            try context.thread_ctx.logger.log("SEARCH", "thread cancelled", .{});
             break;
         }
 
@@ -61,11 +56,18 @@ pub fn searchInfinite(context: InfiniteSearchContext) !void {
 }
 
 // Search for the best move for a position, to a given depth.
-pub fn search(pos: *position.Position, depth: u64, alpha: i64, beta: i64, should_cancel: *bool, a: *Allocator) u32 {
+pub fn search(pos: *position.Position, depth: u64, alpha: i64, beta: i64, ctx: SearchContext) u32 {
+
+    var debug_buf = std.ArrayList(u8).init(ctx.a);
+    defer debug_buf.deinit();
+    debug.toFEN(pos.*, &debug_buf) catch unreachable;
+    ctx.logger.log("SEARCH", "\tposition = {s}, depth = {}, alpha = {}, beta = {}", .{debug_buf.items, depth, alpha, beta}) catch unreachable;
+
     // Generate all legal moves for the current position.
-    var moves = ArrayList(u32).init(a);
+    var moves = ArrayList(u32).init(ctx.a);
     defer moves.deinit();
     movegen.generateLegalMoves(&moves, pos);
+    ctx.logger.log("SEARCH", "\tgenerated starting moves: n = {}", .{moves.items.len}) catch unreachable;
 
     var best_score: i64 = -100000;
     var best_move: u32 = move.NULL_MOVE;
@@ -73,7 +75,7 @@ pub fn search(pos: *position.Position, depth: u64, alpha: i64, beta: i64, should
     // For each move available, run a search of its tree to the given depth, to
     // identify the best outcome.
     for (moves.items) |m| {
-        if (should_cancel.*) {
+        if (ctx.cancelled.*) {
             break;
         }
 
@@ -83,7 +85,7 @@ pub fn search(pos: *position.Position, depth: u64, alpha: i64, beta: i64, should
         }
 
         const artifacts = make_move.makeMove(pos, m);
-        const negamax_score: i64 = -alphaBeta(pos, alpha, beta, depth, a);
+        const negamax_score: i64 = -alphaBeta(pos, alpha, beta, depth, ctx);
 
         if (negamax_score >= best_score) {
             best_score = negamax_score;
@@ -104,7 +106,7 @@ pub fn search(pos: *position.Position, depth: u64, alpha: i64, beta: i64, should
 // candidate.
 // This function was implemented from the pseudocode at
 // https://chessprogramming.wikispaces.com/Alpha-Beta.
-fn alphaBeta(pos: *position.Position, alpha: i64, beta: i64, depth: u64, a: *Allocator) i64 {
+fn alphaBeta(pos: *position.Position, alpha: i64, beta: i64, depth: u64, ctx: SearchContext) i64 {
     // At the bottom of the tree, return the score of the position for the attacking player.
     if (depth == 0) {
         return evaluate.evaluate(pos.*);
@@ -113,9 +115,10 @@ fn alphaBeta(pos: *position.Position, alpha: i64, beta: i64, depth: u64, a: *All
     var new_alpha: i64 = alpha;
 
     // Otherwise, generate all possible moves.
-    var moves = ArrayList(u32).init(a);
+    var moves = ArrayList(u32).init(ctx.a);
     defer moves.deinit();
     movegen.generateLegalMoves(&moves, pos);
+    // ctx.stderr.writer().print("??? [ALPHAB] \tgenerated moves: n = {}, depth = {}, alpha = {}, beta = {}\n", .{moves.items.len, depth, alpha, beta}) catch unreachable;
 
     for (moves.items) |m| {
         if (m == move.NULL_MOVE) {
@@ -127,7 +130,7 @@ fn alphaBeta(pos: *position.Position, alpha: i64, beta: i64, depth: u64, a: *All
         const artifacts = make_move.makeMove(pos, m);
 
         // Recursively call the search function to determine the move's score.
-        const score: i64 = -alphaBeta(pos, -beta, -new_alpha, depth - 1, a);
+        const score: i64 = -alphaBeta(pos, -beta, -new_alpha, depth - 1, ctx);
 
         // If the score is higher than the beta cutoff, the rest of the search
         // tree is irrelevant and the cutoff is returned.
