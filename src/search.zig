@@ -57,7 +57,7 @@ pub fn searchInfinite(context: InfiniteSearchContext) !void {
 
 // Search for the best move for a position, to a given depth.
 pub fn search(pos: *position.Position, depth: u64, alpha: i64, beta: i64, ctx: SearchContext) u32 {
-
+    // Log the starting position of the search
     var debug_buf = std.ArrayList(u8).init(ctx.a);
     defer debug_buf.deinit();
     debug.toFEN(pos.*, &debug_buf) catch unreachable;

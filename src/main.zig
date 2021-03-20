@@ -256,7 +256,9 @@ fn startAnalysis(options: []GoOption, logger: Logger, a: *Allocator) !void {
             SearchMode.mate => {},
             SearchMode.ponder => {},
             SearchMode.movetime => {
-
+                _ = try worker.start(&engine_data.pos, &engine_data.best_move, logger, a);
+                std.time.sleep(opts.movetime * std.time.ns_per_ms);
+                try stopAnalysis(logger);
             },
             SearchMode.nodes => {},
             SearchMode.infinite => {
