@@ -103,7 +103,7 @@ pub fn fromFENStruct(fen: Fen) Position {
                 king_indices[@enumToInt(piece_color)] = bitboardIndex(file_index, rank_index);
             }
 
-            board.setFR(piece_type, piece_color, file_index, 7 - rank_index);
+            board.setFR(piece_type, piece_color, file_index, rank_index);
             file_index += 1;
         }
     }

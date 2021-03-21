@@ -52,7 +52,7 @@ pub const Bitboard = struct {
     }
 
     pub fn occupied(self: Bitboard) u64 {
-        return self.boards[Color.white] | self.boards[Color.black];
+        return self.boards[@enumToInt(Color.white)] | self.boards[@enumToInt(Color.black)];
     }
 
     pub fn eq(self: Bitboard, other: Bitboard) bool {
@@ -68,10 +68,12 @@ pub const Bitboard = struct {
         std.debug.print("rook: {b}\n", .{self.boards[5]});
         std.debug.print("queen: {b}\n", .{self.boards[6]});
         std.debug.print("king: {b}\n", .{self.boards[7]});
+        std.debug.print("empty: {b}\n", .{self.empty()});
+        std.debug.print("occupied: {b}\n", .{self.occupied()});
     }
 };
 
-// Each bitboard is packed in little-endian file-rank order (LERF)
+// Each bitboard is packed in little-endian rank-file order (LERF)
 //
 // From https://www.chessprogramming.org/Little-endian:
 //
