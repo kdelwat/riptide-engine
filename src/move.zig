@@ -89,8 +89,8 @@ pub const Move = struct {
         return move;
     }
 
-    pub fn is(self: Move, piece_type: MoveType) bool {
-        return self.move_type == piece_type;
+    pub fn is(self: Move, move_type: MoveType) bool {
+        return self.move_type == move_type;
     }
 
     pub fn isCastle(self: Move) bool {
@@ -98,11 +98,11 @@ pub const Move = struct {
     }
 
     pub fn isPromotion(self: Move) bool {
-        return @enumToInt(self.move_type) & 0b1000 != 0;
+        return @enumToInt(self.move_type) & 0b1000 == 0b1000;
     }
 
     pub fn isPromotionCapture(self: Move) bool {
-        return @enumToInt(self.move_type) & 0b1100 != 0;
+        return @enumToInt(self.move_type) & 0b1100 == 0b1100;
     }
 
     pub fn getPromotedPiece(self: Move) PieceType {

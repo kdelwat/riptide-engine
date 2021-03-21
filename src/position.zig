@@ -99,7 +99,6 @@ pub fn fromFENStruct(fen: Fen) Position {
             const piece_type = pieceTypeFromFenCode(c);
 
             if (piece_type == PieceType.king) {
-                std.debug.print("file: {}, rank: {}, color: {}\n", .{file_index, rank_index, piece_color});
                 king_indices[@enumToInt(piece_color)] = bitboardIndex(file_index, rank_index);
             }
 

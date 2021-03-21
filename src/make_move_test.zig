@@ -4,6 +4,7 @@ const test_allocator = std.testing.allocator;
 
 const position = @import("./position.zig");
 const Move = @import("./move.zig").Move;
+const MoveType = @import("./move.zig").MoveType;
 const make_move = @import("./make_move.zig");
 const debug = @import("./debug.zig");
 const PieceType = @import("./piece.zig").PieceType;
@@ -11,14 +12,13 @@ const Color = @import("./color.zig").Color;
 
 
 test "Quiet move" {
-    var default_pos = position.fromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") catch unreachable;
-    default_pos.board.debug();
     var starting_pos = position.fromFEN("rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2") catch unreachable;
+    const starting_pos_saved = starting_pos;
 
     const expected_pos = position.fromFEN("rnbqkbnr/pppp1ppp/8/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR b KQkq - 1 2") catch unreachable;
     const m = Move.initQuiet(5, 26, Color.white, PieceType.bishop);
 
-    _ = make_move.makeMove(&starting_pos, m);
+    const artifacts = make_move.makeMove(&starting_pos, m);
 
 //    var list = std.ArrayList(u8).init(test_allocator);
 //    defer list.deinit();
@@ -27,23 +27,29 @@ test "Quiet move" {
 
     std.testing.expectEqualSlices(u64, starting_pos.board.boards[0..], expected_pos.board.boards[0..]);
     expect(starting_pos.eq(expected_pos));
+
+    make_move.unmakeMove(&starting_pos, m, artifacts);
+    expect(starting_pos.eq(starting_pos_saved));
 }
 
-//test "Capture" {
-//    var starting_pos = position.fromFEN("rnbqkb1r/pppp1ppp/5n2/1B2p3/4P3/8/PPPP1PPP/RNBQK1NR b KQkq - 3 3") catch unreachable;
-//    const starting_pos_saved = starting_pos;
-//
-//    const expected_pos = position.fromFEN("rnbqkb1r/pppp1ppp/8/1B2p3/4n3/8/PPPP1PPP/RNBQK1NR w KQkq - 0 4") catch unreachable;
-//    const m = move.createCaptureMove(85, 52);
-//
-//    const artifacts = make_move.makeMove(&starting_pos, m);
-//
-//    expect(starting_pos.eq(expected_pos));
-//
-//    make_move.unmakeMove(&starting_pos, move.createCaptureMove(85, 52), artifacts);
-//
-//    expect(starting_pos.eq(starting_pos_saved));
-//}
+test "Capture" {
+    var starting_pos = position.fromFEN("rnbqkb1r/pppp1ppp/5n2/1B2p3/4P3/8/PPPP1PPP/RNBQK1NR b KQkq - 3 3") catch unreachable;
+    const starting_pos_saved = starting_pos;
+
+    const expected_pos = position.fromFEN("rnbqkb1r/pppp1ppp/8/1B2p3/4n3/8/PPPP1PPP/RNBQK1NR w KQkq - 0 4") catch unreachable;
+
+    const m = Move.initCapture(45, 28, Color.black, PieceType.knight, Color.white, PieceType.pawn);
+    expect(m.is(MoveType.capture));
+
+    const artifacts = make_move.makeMove(&starting_pos, m);
+    starting_pos.board.debug();
+    expected_pos.board.debug();
+    expect(starting_pos.eq(expected_pos));
+
+    make_move.unmakeMove(&starting_pos, m, artifacts);
+
+    expect(starting_pos.eq(starting_pos_saved));
+}
 //
 //test "Double pawn push" {
 //    var starting_pos = position.fromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") catch unreachable;
