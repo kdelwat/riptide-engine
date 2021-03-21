@@ -1,205 +1,157 @@
 const piece = @import("./piece.zig");
 const PieceType = piece.PieceType;
 const std = @import("std");
+const Color = @import("./color.zig").Color;
 
-// A move is encoded as a 32-bit integer.
-//
-//         _ _ _ _  _ _ _ _   unused
-// castle  +-----+ +------+   special
-//         +--------------+   from index
-//         +--------------+   to index
-//
-// The special byte encodes information about captures, promotions, and other
-// non-standard moves. Its schema is taken from
-// https://chessprogramming.wikispaces.com/Encoding+Moves.
-//
-// +----------------------+-----------+---------+-----------+-----------+
-// |      Move type       | Promotion | Capture | Special 1 | Special 2 |
-// +----------------------+-----------+---------+-----------+-----------+
-// | quiet                |         0 |       0 |         0 |         0 |
-// | double pawn push     |         0 |       0 |         0 |         1 |
-// | kingside castle      |         0 |       0 |         1 |         0 |
-// | queenside castle     |         0 |       0 |         1 |         1 |
-// | capture              |         0 |       1 |         0 |         0 |
-// | en passant           |         0 |       1 |         0 |         1 |
-// | knight promotion     |         1 |       0 |         0 |         0 |
-// | bishop promotion     |         1 |       0 |         0 |         1 |
-// | rook promotion       |         1 |       0 |         1 |         0 |
-// | queen promotion      |         1 |       0 |         1 |         1 |
-// | knight promo-capture |         1 |       1 |         0 |         0 |
-// | bishop promo-capture |         1 |       1 |         0 |         1 |
-// | rook promo-capture   |         1 |       1 |         1 |         0 |
-// | queen promo-capture  |         1 |       1 |         1 |         1 |
-// +----------------------+-----------+---------+-----------+-----------+
+pub const MoveType = enum(u4) {
+    quiet                = 0b0000,
+    double_pawn_push     = 0b0001,
+    kingside_castle      = 0b0010,
+    queenside_castle     = 0b0011,
+    capture              = 0b0100,
+    en_passant           = 0b0101,
+    knight_promo         = 0b1000,
+    bishop_promo         = 0b1001,
+    rook_promo           = 0b1010,
+    queen_promo          = 0b1011,
+    knight_promo_capture = 0b1100,
+    bishop_promo_capture = 0b1101,
+    rook_promo_capture   = 0b1110,
+    queen_promo_capture  = 0b1111,
+};
 
-// Empty move
-pub const NULL_MOVE = 0;
+pub const Move = struct {
+    piece_color: Color,
+    piece_type: PieceType,
 
-// Codes used to determine move types.
-const CAPTURE = 0x1 << 18;
-const DOUBLE_PAWN_PUSH = 0x1 << 16;
-const PROMOTION = 0x1 << 19;
-const EN_PASSANT = 0x1 << 16;
-const KNIGHT_PROMOTION: u32 = 0x0;
-const BISHOP_PROMOTION: u32 = 0x1 << 16;
-const ROOK_PROMOTION: u32 = 0x1 << 17;
-const QUEEN_PROMOTION: u32 = 0x3 << 16;
+    captured_piece_type: ?PieceType = null,
+    captured_piece_color: ?Color = null,
 
-pub const KING_CASTLE: u32 = 0x1 << 17;
-pub const QUEEN_CASTLE: u32 = 0x3 << 16;
+    move_type: MoveType = MoveType.quiet,
 
-const FROM_INDEX_OFFSET: u8 = 8;
+    from: u8,
+    to: u8,
 
-pub fn createQuietMove(from: u8, to: u8) u32 {
-    return to | @shlExact(@intCast(u16, from), FROM_INDEX_OFFSET);
-}
-
-pub fn createDoublePawnPush(from: u8, to: u8) u32 {
-    return createQuietMove(from, to) | DOUBLE_PAWN_PUSH;
-}
-
-// Create a capture move between two indices.
-pub fn createCaptureMove(from: u8, to: u8) u32 {
-    return createQuietMove(from, to) | CAPTURE;
-}
-
-// Create a promotion move between two indices, promoting to the given piece
-// type.
-pub fn createPromotionMove(from: u8, to: u8, pieceType: PieceType) u32 {
-    return createQuietMove(from, to)
-        | PROMOTION
-        | switch (pieceType) {
-            PieceType.knight => KNIGHT_PROMOTION,
-            PieceType.bishop => BISHOP_PROMOTION,
-            PieceType.rook => ROOK_PROMOTION,
-            PieceType.queen => QUEEN_PROMOTION,
-            else => 0,
+    pub fn initQuiet(from: u8, to: u8, piece_color: Color, piece_type: PieceType) Move {
+        return Move{
+            .from = from,
+            .to = to,
+            .piece_color = piece_color,
+            .piece_type = piece_type,
         };
-}
-
-// Create a promotion capture move between two indices, promoting to the given
-// piece type.
-pub fn createPromotionCaptureMove(from: u8, to: u8, pieceType: PieceType) u32 {
-    return createPromotionMove(from, to, pieceType) | CAPTURE;
-}
-
-// Create an en passant capture between two indices.
-pub fn createEnPassantCaptureMove(from: u8, to: u8) u32 {
-    return createCaptureMove(from, to) | EN_PASSANT;
-}
-
-// Get the from index of a move
-pub fn fromIndex(m: u32) u8 {
-    return @intCast(u8, (m & (0xFF << 8)) >> 8);
-}
-// Get the to index of a move
-pub fn toIndex(m: u32) u8 {
-    return @intCast(u8, m & 0xFF);
-}
-
-// Extract the piece that the move promotes to, in the case of promotions or
-// promotion capture. This information is encoded in the special section of the
-// move, as in the above table.
-const PROMOTION_MASK = 0x3 << 16;
-pub fn getPromotedPiece(m: u32, piece_promoted: u8) u8 {
-    var new_piece: u8 = getPromotedPieceColorblind(m);
-
-    new_piece |= @enumToInt(piece.pieceColor(piece_promoted));
-
-    return new_piece;
-}
-
-pub fn getPromotedPieceColorblind(m: u32) u8 {
-    var new_piece: u8 = 0;
-
-    switch (m & PROMOTION_MASK) {
-        BISHOP_PROMOTION => new_piece |= @enumToInt(PieceType.bishop),
-        KNIGHT_PROMOTION => new_piece |= @enumToInt(PieceType.knight),
-        QUEEN_PROMOTION => new_piece |= @enumToInt(PieceType.queen),
-        ROOK_PROMOTION => new_piece |= @enumToInt(PieceType.rook),
-        else => {},
     }
 
-    return new_piece;
-}
+    pub fn initDoublePawnPush(from: u8, to: u8, piece_color: Color) Move {
+        var move = Move.initQuiet(from, to, piece_color, PieceType.pawn);
+        move.move_type = MoveType.double_pawn_push;
+        return move;
+    }
 
-const MOVE_TYPE_MASK = 0xF << 16;
+    pub fn initCapture(from: u8, to: u8, piece_color: Color, piece_type: PieceType, captured_piece_color: Color, captured_piece_type: PieceType) Move {
+        var move = Move.initQuiet(from, to, piece_color, piece_type);
+        move.move_type = MoveType.capture;
+        move.captured_piece_color = captured_piece_color;
+        move.captured_piece_type = captured_piece_type;
+        return move;
+    }
 
-// Is the move a quiet move?
-pub fn isQuiet(m: u32) bool {
-    return (m & MOVE_TYPE_MASK == 0);
-}
+    pub fn initPromotion(from: u8, to: u8, piece_color: Color, piece_type: PieceType, promote_to: PieceType) Move {
+        var move = Move.initQuiet(from, to, piece_color, piece_type);
+        move.move_type = switch (promote_to) {
+            PieceType.knight => knight_promo,
+            PieceType.bishop => bishop_promo,
+            PieceType.rook => rook_promo,
+            PieceType.queen => queen_promo,
+            else => 0,
+        };
 
-// Is the move a promotion?
-pub fn isPromotion(m: u32) bool {
-    return (m & PROMOTION != 0);
-}
+        return move;
+    }
 
-// Is the move a promotion capture?
-pub fn isPromotionCapture(m: u32) bool {
-    return isPromotion(m) and (m & CAPTURE != 0);
-}
+    pub fn initPromotionCapture(from: u8, to: u8, piece_color: Color, piece_type: PieceType, promote_to: PieceType, captured_piece_color: Color, captured_piece_type: PieceType) Move {
+        var move = Move.initQuiet(from, to, piece_color, piece_type);
+        move.move_type = switch (promote_to) {
+            PieceType.knight => knight_promo_capture,
+            PieceType.bishop => bishop_promo_capture,
+            PieceType.rook => rook_promo_capture,
+            PieceType.queen => queen_promo_capture,
+            else => 0,
+        };
+        move.captured_piece_color = captured_piece_color;
+        move.captured_piece_type = captured_piece_type;
 
-// Is the move a capture?
-pub fn isCapture(m: u32) bool {
-    return (m & CAPTURE != 0);
-}
+        return move;
+    }
 
-// Is the move a castle?
-pub fn isCastle(m: u32) bool {
-    return isKingCastle(m) or isQueenCastle(m);
-}
+    pub fn initEnPassant(from: u8, to: u8, piece_color: Color) Move {
+        var move = Move.initQuiet(from, to, piece_color, PieceType.pawn);
+        move.move_type = MoveType.en_passant;
+        return move;
+    }
 
-// Is the move a kingside castle?
-pub fn isKingCastle(m: u32) bool {
-    return ((m & MOVE_TYPE_MASK)>>16 == 2);
-}
+    pub fn is(self: Move, piece_type: MoveType) bool {
+        return self.move_type == piece_type;
+    }
 
-// Is the move a queenside castle?
-pub fn isQueenCastle(m: u32) bool {
-    return ((m & MOVE_TYPE_MASK)>>16 == 3);
-}
+    pub fn isCastle(self: Move) bool {
+        return self.move_type == MoveType.queenside_castle or self.move_type == MoveType.kingside_castle;
+    }
 
-// Is the move a double pawn push?
-pub fn isDoublePawnPush(m: u32) bool {
-    return ((m & MOVE_TYPE_MASK)>>16 == 1);
-}
+    pub fn isPromotion(self: Move) bool {
+        return @enumToInt(self.move_type) & 0b1000 != 0;
+    }
 
-// Is the move an en passant capture?
-pub fn isEnPassantCapture(m: u32) bool {
-    return isCapture(m) and (m & EN_PASSANT != 0);
-}
+    pub fn isPromotionCapture(self: Move) bool {
+        return @enumToInt(self.move_type) & 0b1100 != 0;
+    }
 
-pub fn toLongAlgebraic(m: u32) ![]const u8 {
-    var ret: [5]u8 = undefined;
+    pub fn getPromotedPiece(self: Move) PieceType {
+        return switch (self.move_type) {
+            .knight_promo => PieceType.knight,
+            .bishop_promo => PieceType.bishop,
+            .rook_promo   => PieceType.rook,
+            .queen_promo  => PieceType.queen,
 
-    const to = toIndex(m);
-    const from = fromIndex(m);
-    const to_rank = to / 16 + 1;
-    const to_file = (to % 16) + 'a';
-    const from_rank = from / 16 + 1;
-    const from_file = (from % 16) + 'a';
+            .knight_promo_capture => PieceType.knight,
+            .bishop_promo_capture => PieceType.bishop,
+            .rook_promo_capture   => PieceType.rook,
+            .queen_promo_capture  => PieceType.queen,
 
-    if (isPromotion(m) or isPromotionCapture(m)) {
-        const promotion_piece = getPromotedPieceColorblind(m);
+            else => PieceType.empty,
+        };
+    }
+
+    pub fn toLongAlgebraic(self: Move) ![]const u8 {
+        var ret: [5]u8 = undefined;
+
+        const to = self.to;
+        const from = self.from;
+        const to_rank = to / 16 + 1;
+        const to_file = (to % 16) + 'a';
+        const from_rank = from / 16 + 1;
+        const from_file = (from % 16) + 'a';
+
+        if (self.isPromotion()) {
+            const promotion_piece = self.getPromotedPiece();
+
+            return try std.fmt.bufPrint(
+                ret[0..],
+                "{c}{d}{c}{d}{c}",
+                .{from_file, from_rank, to_file, to_rank, pieceToCharColorblind(promotion_piece)},
+            );
+        }
 
         return try std.fmt.bufPrint(
             ret[0..],
-            "{c}{d}{c}{d}{c}",
-            .{from_file, from_rank, to_file, to_rank, pieceToCharColorblind(promotion_piece)},
+            "{c}{d}{c}{d}",
+            .{from_file, from_rank, to_file, to_rank},
         );
     }
+};
 
-    return try std.fmt.bufPrint(
-        ret[0..],
-        "{c}{d}{c}{d}",
-        .{from_file, from_rank, to_file, to_rank},
-    );
-}
-
-// Converts a piece to a FEN char.
-fn pieceToCharColorblind(p: u8) u8 {
-    var code: u8 = switch (piece.pieceType(p)) {
+// Converts a piece to a FEN char, without capitalisation for white.
+fn pieceToCharColorblind(p: PieceType) u8 {
+    return switch (p) {
         PieceType.king => 'k',
         PieceType.queen => 'q',
         PieceType.rook => 'r',
@@ -208,6 +160,4 @@ fn pieceToCharColorblind(p: u8) u8 {
         PieceType.pawn => 'p',
         else => '_',
     };
-
-    return code;
 }
