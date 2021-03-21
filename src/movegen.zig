@@ -4,17 +4,19 @@ const Allocator = std.mem.Allocator;
 const position = @import("./position.zig");
 const piece = @import("./piece.zig");
 const PieceType = piece.PieceType;
-const Color = piece.Color;
+const Color = @import("./color.zig").Color;
 const move = @import("./move.zig");
 const make_move = @import("./make_move.zig");
 const attack = @import("./attack.zig");
 const debug = @import("./debug.zig");
 
-
 // Generate legal moves for a position.
-// Illegal moves are NULLed.
 pub fn generateLegalMoves(moves: *ArrayList(u32), pos: *position.Position) void {
-    // Generate pseudo-legal moves
+    const attacker: Color = switch (pos.to_move) {
+        Color.white => Color.black,
+        Color.black => Color.white,
+    };
+
     generateMoves(moves, pos.*);
 
     const current_player = pos.to_move;
@@ -24,7 +26,8 @@ pub fn generateLegalMoves(moves: *ArrayList(u32), pos: *position.Position) void 
     for (moves.items) |m, i| {
         const artifacts = make_move.makeMove(pos, m);
 
-        if (isKingInCheck(pos.*, current_player)) {
+        const attack_map = attack.generateAttackMap(&pos, attacker);
+        if (isKingInCheck(pos.*, current_player, attack_map)) {
             moves.items[i] = move.NULL_MOVE;
         }
 
@@ -44,163 +47,270 @@ pub fn countNonNullMoves(moves: *ArrayList(u32)) u32 {
 
 // Generate pseudo-legal moves for a position
 pub fn generateMoves(moves: *ArrayList(u32), pos: position.Position) void {
-    var i: u8 = 0;
-    while (i < position.BOARD_SIZE) {
-        if (position.isOnBoard(i) and pos.pieceOn(i)) {
-            const p: u8 = pos.board[i];
-
-            if (piece.pieceColor(p) == pos.to_move) {
-                if (piece.pieceType(p) == PieceType.pawn) {
-                    generatePawnMoves(moves, pos, i) catch unreachable;
-                } else {
-                    generateRegularMoves(moves, pos, i) catch unreachable;
-                }
-
-                if (piece.pieceType(p) == PieceType.king) {
-                    generateCastlingMoves(moves, pos) catch unreachable;
-                }
-            }
-        }
-
-        i += 1;
-    }
+    generatePawnMoves(moves, pos);
+    generatePawnCaptures(moves, pos);
+    generateKnightMoves(moves, pos);
+    generateKingMoves(moves, pos);
+    generateCastlingMoves(moves, pos);
+    generateSlidingMoves(moves, pos);
 }
 
-fn generatePawnMoves(moves: *ArrayList(u32), pos: position.Position, index: u8) !void {
-    // The offset of pawn moves depends on the colour of the pawn, since they
-    // can only move forwards.
-    const white: bool = pos.to_move == Color.white;
+// Generate all non-capture pawn moves, including non-capture promotions
+// Works by generating a bitboard for single and double push targets, then converting
+// that into a list of moves using a bitscan.
+// https://www.chessprogramming.org/Pawn_Pushes_(Bitboards)#PawnPushSetwise
+const RANK_4: u64 = 0x00000000FF000000;
+const RANK_5: u64 = 0x000000FF00000000;
 
-    // If the pawn is on the starting row, it can perform a double push and move
-    // forward two spaces.
-    if (position.isOnStartingRow(index, pos.to_move)) {
-        const new_index: u8  = if (white) index + 32 else index - 32;
-        const jump_index: u8 = if (white) index + 16 else index - 16;
+fn generatePawnMoves(moves: *ArrayList(u32), pos: position.Position) !void {
+    const empty = pos.board.empty();
+    const pawns = pos.board.get(PieceType.pawn, pos.to_move);
 
-        if (!pos.pieceOn(jump_index) and !pos.pieceOn(new_index)) {
-            try moves.append(move.createDoublePawnPush(index, new_index));
-        }
-    }
+    const single_push = switch(pos.to_move) {
+        Color.white => northOne(pawns) & pos.board.empty(),
+        Color.black => southOne(pawns) & pos.board.empty(),
+    };
 
-    // Generate a regular move forwards, and check that the target square is not
-    // occupied.
-    const new_index: u8 = if (white) index + 16 else index - 16;
+    const double_push = switch(pos.to_move) {
+        Color.white => northOne(single_push) & empty & RANK_4,
+        Color.black => southOne(single_push) & empty & RANK_5,
+    };
 
-    if (!pos.pieceOn(new_index)) {
-        // If the pawn is moving to the final rank, generate promotions.
-        if (position.isOnFinalRank(new_index, pos.to_move)) {
-            try moves.append(move.createPromotionMove(index, new_index, PieceType.knight));
-            try moves.append(move.createPromotionMove(index, new_index, PieceType.rook));
-            try moves.append(move.createPromotionMove(index, new_index, PieceType.queen));
-            try moves.append(move.createPromotionMove(index, new_index, PieceType.bishop));
+    const promotion_rank = switch(pos.to_move) {
+        Color.white => 7,
+        Color.black => 0,
+    };
+
+    // If the single push results in a pawn ending up on the final rank, generate
+    // promotion moves. Otherwise generate a quiet push.
+    while (single_push) {
+        const to = bitScanAndReset(&single_push);
+        const from = to - 8;
+
+        if (bitboard.isOnRank(to, promotion_rank)) {
+            try moves.append(move.createPromotionMove(from, to, PieceType.queen));
+            try moves.append(move.createPromotionMove(from, to, PieceType.knight));
+            try moves.append(move.createPromotionMove(from, to, PieceType.rook));
+            try moves.append(move.createPromotionMove(from, to, PieceType.bishop));
         } else {
-            // Otherwise, generate a quiet move.
-            try moves.append(move.createQuietMove(index, new_index));
+            try moves.append(move.createQuietMove(from, to));
         }
     }
 
-    // Generate attacks.
-    if (white or (!white and index >= 15)) {
-        const left_attack: u16 = if (white) index + 15 else index - 15;
-
-        // For each attack, check if a capture is possible.
-        if (position.isOnBoard(left_attack) and pos.pieceOn(left_attack) and piece.pieceColor(pos.board[left_attack]) != pos.to_move) {
-            // If the pawn is capturing a piece on the final rank, generate
-            // promotion captures.
-            if (position.isOnFinalRank(left_attack, pos.to_move)) {
-                try moves.append(move.createPromotionCaptureMove(index, @truncate(u8, left_attack), PieceType.knight));
-                try moves.append(move.createPromotionCaptureMove(index, @truncate(u8, left_attack), PieceType.bishop));
-                try moves.append(move.createPromotionCaptureMove(index, @truncate(u8, left_attack), PieceType.rook));
-                try moves.append(move.createPromotionCaptureMove(index, @truncate(u8, left_attack), PieceType.queen));
-            } else {
-                // Otherwise, generate a regular capture.
-                try moves.append(move.createCaptureMove(index, @truncate(u8, left_attack)));
-            }
-        }
-    }
-
-    if (white or (!white and index >= 17)) {
-        const right_attack: u16 = if (white) index + 17 else index - 17;
-
-        if (position.isOnBoard(right_attack) and pos.pieceOn(right_attack) and piece.pieceColor(pos.board[right_attack]) != pos.to_move) {
-            // If the pawn is capturing a piece on the final rank, generate
-            // promotion captures.
-            if (position.isOnFinalRank(right_attack, pos.to_move)) {
-                try moves.append(move.createPromotionCaptureMove(index, @truncate(u8, right_attack), PieceType.knight));
-                try moves.append(move.createPromotionCaptureMove(index, @truncate(u8, right_attack), PieceType.bishop));
-                try moves.append(move.createPromotionCaptureMove(index, @truncate(u8, right_attack), PieceType.rook));
-                try moves.append(move.createPromotionCaptureMove(index, @truncate(u8, right_attack), PieceType.queen));
-            } else {
-                // Otherwise, generate a regular capture.
-                try moves.append(move.createCaptureMove(index, @truncate(u8, right_attack)));
-            }
-        }
-    }
-
-    // If the en passant target saved in the current position is capturable by
-    // the pawn, generate an en passant move.
-    if (pos.isEnPassantTarget(index)) {
-        try moves.append(move.createEnPassantCaptureMove(index, pos.en_passant_target));
+    // Generate double push moves.
+    while (double_push) {
+        const to = bitScanAndReset(&double_push);
+        const from = to - 16;
+        try moves.append(move.createDoublePawnPush(from, to));
     }
 }
 
-fn generateRegularMoves(moves: *ArrayList(u32), pos: position.Position, index: u8) !void {
-    // For each offset in the piece's offset map, attempt to make a move.
-    for (piece.MOVE_OFFSETS[@enumToInt(piece.pieceType(pos.board[index]))]) |offset| {
-        if (offset == 0) {
-            break;
+fn generatePawnCaptures(moves: *ArrayList(u32), pos: position.Position) !void {
+    var opponent_pieces = pos.board.getColor(color.invert(pos.to_move));
+
+    if (pos.en_passant_target) {
+        opponent_pieces |= (1 << pos.en_passant_target);
+    }
+
+    const pawns = pos.board.get(PieceType.pawn, pos.to_move);
+
+    const east_captures = switch(pos.to_move) {
+        Color.white => northEastOne(pawns) & opponent_pieces,
+        Color.black => southEastOne(pawns) & opponent_pieces,
+    };
+
+    const west_captures = switch(pos.to_move) {
+        Color.white => northWestOne(pawns) & opponent_pieces,
+        Color.black => southWestOne(pawns) & opponent_pieces,
+    };
+
+    const promotion_rank = switch(pos.to_move) {
+        Color.white => 7,
+        Color.black => 0,
+    };
+
+    // If the capture results in a pawn ending up on the final rank, generate
+    // promotion capture moves. Otherwise generate a capture move.
+    while (east_captures) {
+        const to = bitScanAndReset(&east_captures);
+        const from = to - 7; // TODO: might be wrong way around
+
+        if (bitboard.isOnRank(to, promotion_rank)) {
+            try moves.append(move.createPromotionCaptureMove(from, to, PieceType.queen));
+            try moves.append(move.createPromotionCaptureMove(from, to, PieceType.knight));
+            try moves.append(move.createPromotionCaptureMove(from, to, PieceType.rook));
+            try moves.append(move.createPromotionCaptureMove(from, to, PieceType.bishop));
+        } else if (to == pos.en_passant_target) {
+            try moves.append(move.createEnPassantCaptureMove(from, to));
+        } else {
+            try moves.append(move.createCaptureMove(from, to));
+        }
+    }
+
+    while (west_captures) {
+        const to = bitScanAndReset(&west_captures);
+        const from = to - 9; // TODO: might be wrong way around
+
+        if (bitboard.isOnRank(to, promotion_rank)) {
+            try moves.append(move.createPromotionCaptureMove(from, to, PieceType.queen));
+            try moves.append(move.createPromotionCaptureMove(from, to, PieceType.knight));
+            try moves.append(move.createPromotionCaptureMove(from, to, PieceType.rook));
+            try moves.append(move.createPromotionCaptureMove(from, to, PieceType.bishop));
+        } else if (to == pos.en_passant_target) {
+            try moves.append(move.createEnPassantCaptureMove(from, to));
+        } else {
+            try moves.append(move.createCaptureMove(from, to));
+        }
+    }
+}
+
+fn generateKnightMoves(moves: *ArrayList(u32), pos: position.Position) !void {
+    const opponent_pieces = pos.board.getColor(color.invert(pos.to_move));
+    const empty = pos.board.empty();
+    const knights = pos.board.get(PieceType.knight, pos.to_move);
+
+    // While there are knights left to process, find the index and generate moves
+    // for that knight
+    while (knights) {
+        const from = bitScanAndReset(&knights);
+        const targets = attack.KNIGHT_ATTACKS[from];
+
+        const quiet = targets & empty;
+        const captures = targets & opponent_pieces;
+
+        while (quiet) {
+            const to = bitScanAndReset(&quiet);
+            try moves.append(move.createQuietMove(from, to));
         }
 
-        var new_index: u8 = index;
+        while (captures) {
+            const to = bitScanAndReset(&captures);
+            try moves.append(move.createCaptureMove(from, to));
+        }
+    }
+}
 
-        // Slide along the offset for as long as possible, generating the attack
-        // rays for sliding pieces (such as queens).
-        while (true) {
-            const new_index_signed: i32 = @intCast(i32, new_index) + offset;
-            if (new_index_signed < 0 or new_index_signed > 127) {
-                break;
-            }
+fn generateKingMoves(moves: *ArrayList(u32), pos: position.Position) !void {
+    const opponent_pieces = pos.board.getColor(color.invert(pos.to_move));
+    const empty = pos.board.empty();
+    const from = pos.getIndexOfKing(pos.to_move);
 
-            new_index = @intCast(u8, new_index_signed);
+    const targets = attack.KING_ATTACKS[from];
+    var quiet = targets & empty;
+    var captures = targets & opponent_pieces;
 
-            // If the new position is off the board, stop sliding.
-            if (!position.isOnBoard(new_index)) {
-                break;
-            }
+    while (quiet) {
+        const to = bitScanAndReset(&quiet);
+        try moves.append(move.createQuietMove(from, to));
+    }
 
-            if (pos.pieceOn(new_index)) {
-                // If the sliding piece encounters another piece of its own
-                // colour, stop sliding.
-                if (piece.pieceColor(pos.board[new_index]) == pos.to_move) {
-                    break;
-                }
+    while (captures) {
+        const to = bitScanAndReset(&captures);
+        try moves.append(move.createCaptureMove(from, to));
+    }
+}
 
-                // If it encounters a piece of a different colour, capture that
-                // piece.
-                try moves.append(move.createCaptureMove(index, new_index));
+// TODO: inefficient, can be improved?
+fn generateSlidingMoves(moves: *ArrayList(u32), pos: position.Position) !void {
+    const empty = pos.board.empty();
+    const opponent_pieces = pos.board.getColor(color.invert(pos.to_move));
 
-                break;
-            } else {
-                // If there is no piece present, generate a quiet move to the
-                // current index.
-                try moves.append(move.createQuietMove(index, new_index));
-            }
+    var queens = pos.get(PieceType.queen, pos.to_move);
+    var rooks = pos.get(PieceType.queen, pos.to_move);
+    var bishops = pos.get(PieceType.queen, pos.to_move);
 
-            // If the piece isn't a sliding piece (i.e. the king and knight),
-            // only slide once.
-            if (!piece.isSlidingPiece(pos.board[index])) {
-                break;
-            }
+    while (queens) {
+        const from = bitScanAndReset(&queens);
+        var targets = 0;
+        targets |= attack.south_attacks(queens, empty);
+        targets |= attack.north_attacks(queens, empty);
+        targets |= attack.east_attacks(queens, empty);
+        targets |= attack.west_attacks(queens, empty);
+        targets |= attack.north_east_attacks(queens, empty);
+        targets |= attack.north_west_attacks(queens, empty);
+        targets |= attack.south_east_attacks(queens, empty);
+        targets |= attack.south_west_attacks(queens, empty);
+
+        var quiet = targets & empty;
+        var captures = targets & opponent_pieces;
+
+        while (quiet) {
+            const to = bitScanAndReset(&quiet);
+            try moves.append(move.createQuietMove(from, to));
+        }
+
+        while (captures) {
+            const to = bitScanAndReset(&captures);
+            try moves.append(move.createCaptureMove(from, to));
+        }
+    }
+
+    while (rooks) {
+        const from = bitScanAndReset(&rooks);
+        var targets = 0;
+        targets |= attack.south_attacks(rooks, empty);
+        targets |= attack.north_attacks(rooks, empty);
+        targets |= attack.east_attacks(rooks, empty);
+        targets |= attack.west_attacks(rooks, empty);
+
+        var quiet = targets & empty;
+        var captures = targets & opponent_pieces;
+
+        while (quiet) {
+            const to = bitScanAndReset(&quiet);
+            try moves.append(move.createQuietMove(from, to));
+        }
+
+        while (captures) {
+            const to = bitScanAndReset(&captures);
+            try moves.append(move.createCaptureMove(from, to));
+        }
+    }
+
+    while (bishops) {
+        const from = bitScanAndReset(&bishops);
+        var targets = 0;
+        targets |= attack.north_east_attacks(bishops, empty);
+        targets |= attack.north_west_attacks(bishops, empty);
+        targets |= attack.south_east_attacks(bishops, empty);
+        targets |= attack.south_west_attacks(bishops, empty);
+
+        var quiet = targets & empty;
+        var captures = targets & opponent_pieces;
+
+        while (quiet) {
+            const to = bitScanAndReset(&quiet);
+            try moves.append(move.createQuietMove(from, to));
+        }
+
+        while (captures) {
+            const to = bitScanAndReset(&captures);
+            try moves.append(move.createCaptureMove(from, to));
         }
     }
 }
 
 fn generateCastlingMoves(moves: *ArrayList(u32), pos: position.Position) !void {
-    if (pos.hasCastleRight(false) and clearToCastle(pos, move.KING_CASTLE) and !isKingInCheck(pos, pos.to_move)) {
+    // Return early if no castling is possible; this saves the attack generation cost
+    if (!pos.hasCastleRight(false) and !pos.hasCastleRight(true)) {
+        return;
+    }
+
+    // Generate an attack map for the opponent, to test for check and castling through
+    // check
+    const attack_map = pos.generateAttackMap(color.invert(pos.to_move));
+
+    // TODO: can do a faster check here? That doesn't involve creating an attack map if not necessary
+    if (isKingInCheck(pos, pos.to_move, attack_map)) {
+        return;
+    }
+
+    // Kingside castle
+    if (pos.hasCastleRight(false) and clearToCastle(pos, move.KING_CASTLE, attack_map)) {
         try moves.append(move.KING_CASTLE);
     }
 
-    if (pos.hasCastleRight(true) and clearToCastle(pos, move.QUEEN_CASTLE) and !isKingInCheck(pos, pos.to_move)) {
+    if (pos.hasCastleRight(true) and clearToCastle(pos, move.QUEEN_CASTLE, attack_map)) {
         try moves.append(move.QUEEN_CASTLE);
     }
 }
@@ -210,8 +320,8 @@ fn generateCastlingMoves(moves: *ArrayList(u32), pos: position.Position) !void {
 const CASTLING_BLOCKS = [4][3]u8{
     [_]u8{5, 6, 0}, // White king
     [_]u8{1, 2, 3}, // White queen
-    [_]u8{117, 118, 0}, // Black king
-    [_]u8{113, 114, 115}, // Black queen
+    [_]u8{61, 62, 0}, // Black king
+    [_]u8{57, 58, 59}, // Black queen
 };
 
 // CASTLING_CHECKS declares the indices which, if in check, can block castling.
@@ -219,13 +329,15 @@ const CASTLING_BLOCKS = [4][3]u8{
 const CASTLING_CHECKS = [4][2]u8{
     [_]u8{5, 6},
     [_]u8{2, 3},
-    [_]u8{117, 118},
-    [_]u8{114, 115},
+    [_]u8{61, 62},
+    [_]u8{58, 59},
 };
 
-// Given a position and the side to castle (either KING_CASTLE or QUEEN_CASTLE),
+// Given a position, the side to castle (either KING_CASTLE or QUEEN_CASTLE), and an attack map from the opponent,
 // determine if the side is able to legally castle.
-fn clearToCastle(pos: position.Position, side: u32) bool {
+// TODO: this can be sped up by precomputing bitboards for the blocked and checked squares, then doing an intersection
+// with the occupied and attack maps respectively
+fn clearToCastle(pos: position.Position, side: u32, attack_map: u64) bool {
     const castling_index: u8 = switch (side) {
             move.KING_CASTLE => 0,
             move.QUEEN_CASTLE => 1,
@@ -245,19 +357,13 @@ fn clearToCastle(pos: position.Position, side: u32) bool {
     }
 
     // For each index in the potentially-checked indices, ensure that the index
-    // is not attacked. TODO: This could be optimised by only generating the attack
-    // map once.
-    const attacker: Color = switch (pos.to_move) {
-        Color.white => Color.black,
-        Color.black => Color.white,
-    };
-
+    // is not attacked.
     for (CASTLING_CHECKS[castling_index]) |check_index| {
         if (check_index == 0) {
             break;
         }
 
-        if (attack.isAttacked(pos, check_index, attacker)) {
+        if (attack.isSquareAttacked(attack_map, check_index)) {
             return false;
         }
     }
@@ -265,26 +371,8 @@ fn clearToCastle(pos: position.Position, side: u32) bool {
     return true;
 }
 
-pub fn isKingInCheck(pos: position.Position, side: Color) bool {
-    // Find the index of the king on the board.
-    var king_index: u8 = 0;
-    for (pos.board) |p, i| {
-        if (
-            position.isOnBoard(@intCast(u8, i))
-            and p != 0
-            and piece.pieceType(p) == PieceType.king
-            and piece.pieceColor(p) == side
-        ) {
-            king_index = @intCast(u8, i);
-            break;
-        }
-    }
+pub fn isKingInCheck(pos: position.Position, side: Color, attack_map: u64) bool {
+    const king_index = pos.king_indices[@enumToInt(side)];
 
-    const attacker: Color = switch (side) {
-        Color.white => Color.black,
-        Color.black => Color.white,
-    };
-
-    // Determine whether the index is attacked.
-    return attack.isAttacked(pos, king_index, attacker);
+    return attack.isSquareAttacked(attack_map, king_index);
 }

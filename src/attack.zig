@@ -1,190 +1,141 @@
 const position = @import("./position.zig");
 const piece = @import("./piece.zig");
-const Color = piece.Color;
+const Color = @import("./color.zig").Color;
 const PieceType = piece.PieceType;
 const std = @import("std");
+usingnamespace @import("./bitboard_ops.zig");
 
-// These constants remove bits from a bitboard on the A and H file respectively.
-//
-// For example, if we have a bitboard representing attacks of a queen that looks
-// like this:
-//
-//     1 0 0 1 0 0 1 0
-//     0 1 0 1 0 1 0 0
-//     0 0 1 1 1 0 0 0
-//     1 1 1 1 1 1 1 1
-//     0 0 1 1 1 0 0 0
-//     0 1 0 1 0 1 0 0
-//     1 0 0 1 0 0 1 0
-//     0 0 0 1 0 0 0 1
-//
-// A bitwise AND with notA will remove any attacks on the A file:
-//
-//     0 0 0 1 0 0 1 0
-//     0 1 0 1 0 1 0 0
-//     0 0 1 1 1 0 0 0
-//     0 1 1 1 1 1 1 1
-//     0 0 1 1 1 0 0 0
-//     0 1 0 1 0 1 0 0
-//     0 0 0 1 0 0 1 0
-//     0 0 0 1 0 0 0 1
+// King attack indices, based on https://www.chessprogramming.org/King_Pattern#KingAttacks
+// We can generate the final KING_ATTACKS array at compile time, which gives an attack
+// bitboard for each king position.
+fn generateKingAttackBitboard(king_bitboard: u64) u64 {
+   var temp_king_bitboard = king_bitboard;
+   var attacks = eastOne(temp_king_bitboard) | westOne(temp_king_bitboard);
+   temp_king_bitboard |= attacks;
+   attacks |= northOne(temp_king_bitboard) | southOne(temp_king_bitboard);
+   return attacks;
+}
 
-const NOT_A: u64 = 0xfefefefefefefefe;
-const NOT_H: u64 = 0x7f7f7f7f7f7f7f7f;
+fn generateKingAttackArray() [64]u64 {
+    var array: [64]u64 = undefined;
 
+    var i: u7 = 0;
+    while (i < 64) {
+        array[i] = generateKingAttackBitboard(@truncate(u64, @as(u128, 1) << i));
+        i += 1;
+    }
 
-// The following declaration is an attack map, which represents the ability of
-// pieces to attack each other around the board. This is used for quick lookups -
-// we can skip generating attacks for a Queen, for example, if we know already that
-// its position couldn't possibly attack the King.
-// This attack map, and the associated method, was created by Jonatan Pettersson.
-// See his guide here:
-// https://mediocrechess.blogspot.com.au/2006/12/guide-attacked-squares.html
+    return array;
+}
 
-const AttackType = enum(u8) {
-    attack_none  = 0,
-    attack_KQR   = 1,
-    attack_QR    = 2,
-    attack_KQBwP = 3,
-    attack_KQBbP = 4,
-    attack_QB    = 5,
-    attack_N     = 6,
-};
+const KING_ATTACKS: [64]u64 = comptime generateKingAttackArray();
 
-const ATTACK_ARRAY = [_]u8{
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0,
-    0, 0, 0, 5, 0, 0, 5, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 5, 0,
-    0, 0, 0, 5, 0, 0, 0, 0, 2, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0,
-    5, 0, 0, 0, 2, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0,
-    2, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 6, 2, 6, 5, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 4, 1, 4, 6, 0, 0, 0, 0, 0,
-    0, 2, 2, 2, 2, 2, 2, 1, 0, 1, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0,
-    0, 0, 6, 3, 1, 3, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 6,
-    2, 6, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 2, 0, 0, 5,
-    0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 2, 0, 0, 0, 5, 0, 0, 0,
-    0, 0, 0, 5, 0, 0, 0, 0, 2, 0, 0, 0, 0, 5, 0, 0, 0, 0, 5, 0,
-    0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 5, 0, 0, 5, 0, 0, 0, 0, 0, 0,
-    2, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0
-};
+// Knight attack indices, based on https://www.chessprogramming.org/Knight_Pattern#KnightAttacks
+// We can generate the final KNIGHT_ATTACKS array at compile time, which gives an attack
+// bitboard for each knight position.
+fn generateKnightAttackBitboard(knight_bitboard: u64) u64 {
+   var temp_bitboard = knight_bitboard;
+   var attacks: u64 = 0;
+   var east = eastOne(temp_bitboard);
+   var west = westOne(temp_bitboard);
 
-// isAttacked determines if a piece is under attack. It takes the current game
-// position, the index of the piece in question (in 0x88 form).
-pub fn isAttacked(pos: position.Position, target_index: u8, attacker: Color) bool {
-    // Declare bitboards for representing the pieces present. While the normal board position is in 0x88 form, these
-    // bitboards don't require the extra squares and simple represent an 8x8 grid, meaning that they can fit in a
-    // 64-bit integer.
+   attacks = (east | west) << 16;
+   attacks |= (east | west) >> 16;
 
+   east = eastOne(east);
+   west = westOne(west);
+
+   attacks |= (east | west) << 8;
+   attacks |= (east | west) >> 8;
+
+   return attacks;
+}
+
+fn generateKnightAttackArray() [64]u64 {
+    var array: [64]u64 = undefined;
+
+    var i: u7 = 0;
+    while (i < 64) {
+        array[i] = generateKnightAttackBitboard(@truncate(u64, @as(u128, 1) << i));
+        i += 1;
+    }
+
+    return array;
+}
+
+pub const KNIGHT_ATTACKS: [64]u64 = comptime generateKnightAttackArray();
+
+// Pawn attack indices, based on https://www.chessprogramming.org/Pawn_Attacks_(Bitboards)
+// We can generate the final PAWN_ATTACKS array at compile time, which gives an attack
+// bitboard for each pawn position.
+pub fn generateWhitePawnAttackBitboard(pawn_bitboard: u64) u64 {
+   return northEastOne(pawn_bitboard) | northWestOne(pawn_bitboard);
+}
+
+pub fn generateWhitePawnEastAttacks(pawn_bitboard: u64) u64 {
+   return northEastOne(pawn_bitboard) | northWestOne(pawn_bitboard);
+}
+
+pub fn generateBlackPawnAttackBitboard(pawn_bitboard: u64) u64 {
+   return southEastOne(pawn_bitboard) | southWestOne(pawn_bitboard);
+}
+
+pub fn generateAttackMap(pos: *position.Position, attacker: Color) u64 {
     // attack_map represents the squares currently under attack.
     var attack_map: u64 = 0;
 
-    // empty represents squares with no pieces.
-    var empty: u64 = 0;
-
     // The other bitboards hold the positions of sliding pieces.
-    var queens: u64 = 0;
-    var rooks: u64 = 0;
-    var bishops: u64 = 0;
+    const queens: u64 = pos.board.get(PieceType.queen, attacker);
+    const rooks: u64 = pos.board.get(PieceType.rook, attacker);
+    const bishops: u64 = pos.board.get(PieceType.bishop, attacker);
 
-    // Loop through every index on the board, skipping over indices that fall
-    // outside the visible playing area.
-    for (pos.board) |p, i| {
-        if (!position.isOnBoard(@intCast(u8, i))) {
-            continue;
-        }
+    // TODO: May need to filter this to only empty positions on attacking side?
+    const empty: u64 = pos.board.empty();
 
-        // If there is a piece present, but it isn't on the attacking side,
-        // we can skip the iteration.
-        if (p != 0 and piece.pieceColor(p) != attacker) {
-            continue;
-        }
-
-        // Look up the pieces that can attack the target from this index,
-        // using the attack array declared above. The lookup returns a
-        // constant representing the set of possible pieces.
-        const attack_array_index: usize = @intCast(usize, @intCast(isize, target_index) - @intCast(isize, i) + 128);
-        const can_attack: AttackType = @intToEnum(AttackType, ATTACK_ARRAY[attack_array_index]);
-
-        // Convert the index in 0x88 form to the standard 8x8 form.
-        const index: u6 = @intCast(u6, map0x88ToStandard(@intCast(u8, i)));
-
-
-        // Moves are generated differently depending on the type of piece.
-        // Non-sliding pieces can simply be checked against the can_attack
-        // constant generated previously. If they are found to be
-        // attacking, we can return early and save computations.
-        // Sliding pieces are first checked against this constant, which
-        // saves costly move generation if it's impossible for them to ever
-        // attack the target square. If they could attack it, they are
-        // added to the relevant bitboard for later generation.
-        switch (piece.pieceType(p)) {
-            PieceType.queen =>
-                if (can_attack == AttackType.attack_none or can_attack == AttackType.attack_N) {
-                    continue;
-                } else {
-                    queens |= @shlExact(@intCast(u64, 1), index);
-                },
-            PieceType.bishop =>
-                if (!(can_attack == AttackType.attack_KQBbP or can_attack == AttackType.attack_KQBwP or can_attack == AttackType.attack_QB)) {
-                    continue;
-                } else {
-                    bishops |= @shlExact(@intCast(u64, 1), index);
-                },
-            PieceType.rook =>
-                if (!(can_attack == AttackType.attack_KQR or can_attack == AttackType.attack_QR)) {
-                    continue;
-                } else {
-                    rooks |= @shlExact(@intCast(u64, 1), index);
-                },
-            PieceType.knight =>
-                if (can_attack == AttackType.attack_N) {
-                    return true;
-                },
-            PieceType.pawn =>
-                if ((attacker == Color.white and can_attack == AttackType.attack_KQBwP) or (attacker == Color.black and can_attack == AttackType.attack_KQBbP)) {
-                    return true;
-                },
-            PieceType.king =>
-                if (can_attack == AttackType.attack_KQR or can_attack == AttackType.attack_KQBbP or can_attack == AttackType.attack_KQBwP) {
-                    return true;
-                },
-            else =>
-                empty |= @shlExact(@intCast(u64, 1), index),
-        }
-    }
-
-    
-    // Now that the bitboards have been filled by sliding pieces, we can generate
-    // the attack map. To do this, we use the Dumb7Fill algorithm, implemented
+    // Generate the attacks of all sliding pieces.
+    // To do this, we use the Dumb7Fill algorithm, implemented
     // based on the site https://chessprogramming.wikispaces.com/Dumb7Fill.
     // For each direction a sliding piece could move, these moves are generated,
     // following a three step process:
-    //     1. The pieces that can make that move have their bitboards combined with bitwise OR. For example, only queens and rooks can attack directly east, so we only combine their bitboards.
-    //     2. The bitboard is shifted according to the algorithm, which moves the pieces in the relevant direction until they hit a non-empty square (which blocks the attack.)
+    //
+    //     1. The pieces that can make that move have their bitboards combined with bitwise OR. For example, only queens
+    //        and rooks can attack directly east, so we only combine their bitboards.
+    //     2. The bitboard is shifted according to the algorithm, which moves the pieces in the relevant direction until
+    //        they hit a non-empty square (which blocks the attack.)
     //     3. These moves are combined with the overall attack map using bitwise OR.
-    
-    attack_map |= south_attacks(queens|rooks, empty);
-    attack_map |= north_attacks(queens|rooks, empty);
-    attack_map |= east_attacks(queens|rooks, empty);
-    attack_map |= west_attacks(queens|rooks, empty);
-    attack_map |= north_east_attacks(queens|bishops, empty);
-    attack_map |= north_west_attacks(queens|bishops, empty);
-    attack_map |= south_east_attacks(queens|bishops, empty);
-    attack_map |= south_west_attacks(queens|bishops, empty);
+    attack_map |= southAttacks(queens|rooks, empty);
+    attack_map |= northAttacks(queens|rooks, empty);
+    attack_map |= eastAttacks(queens|rooks, empty);
+    attack_map |= westAttacks(queens|rooks, empty);
+    attack_map |= northEastAttacks(queens|bishops, empty);
+    attack_map |= northWestAttacks(queens|bishops, empty);
+    attack_map |= southEastAttacks(queens|bishops, empty);
+    attack_map |= southWestAttacks(queens|bishops, empty);
 
-    // Finally, we check whether the target index is attacked in the attack map
-    // and return true if possible.
-    return attack_map & @shlExact(@intCast(u64, 1), @intCast(u6, map0x88ToStandard(target_index))) != 0;
+    // Pawn attack generation
+    attack_map |= switch (attacker) {
+        Color.white => generateWhitePawnAttackBitboard(pos.board.get(PieceType.pawn, attacker)),
+        Color.black => generateBlackPawnAttackBitboard(pos.board.get(PieceType.pawn, attacker)),
+    };
+
+    // Knight attack generation
+    var knights = pos.board.get(PieceType.knight, attacker);
+    while (knights != 0) {
+        const i = bitscanForwardAndReset(&knights);
+        attack_map |= KNIGHT_ATTACKS[i];
+    }
+
+    // King attack generation
+    attack_map |= KING_ATTACKS[pos.getIndexOfKing(attacker)];
+
+    return attack_map;
 }
 
-
-
-fn map0x88ToStandard(index: u8) u8 {
-    const rank: u8 = index / 16;
-    const file: u8 = index % 16;
-    return rank * 8 + file;
+pub fn isSquareAttacked(attack_map: u64, index: u8) bool {
+    return (attack_map & (@as(u64, 1) << @truncate(u6, index))) > 0;
 }
 
-fn south_attacks(start_const: u64, empty: u64) u64 {
+fn southAttacks(start_const: u64, empty: u64) u64 {
     var flood: u64 = 0;
     var start: u64 = start_const;
 
@@ -196,7 +147,7 @@ fn south_attacks(start_const: u64, empty: u64) u64 {
     return flood >> 8;
 }
 
-fn north_attacks(start_const: u64, empty: u64) u64 {
+fn northAttacks(start_const: u64, empty: u64) u64 {
     var flood: u64 = 0;
     var start: u64 = start_const;
 
@@ -208,91 +159,91 @@ fn north_attacks(start_const: u64, empty: u64) u64 {
     return flood << 8;
 }
 
-fn east_attacks(start_const: u64, empty_const: u64) u64 {
+fn eastAttacks(start_const: u64, empty_const: u64) u64 {
     var flood: u64 = 0;
     var start: u64 = start_const;
     var empty: u64 = empty_const;
 
-    empty &= NOT_A;
+    empty &= NOT_A_FILE;
     while (start != 0) {
         flood |= start;
         start = (start << 1) & empty;
     }
 
-    return (flood << 1) & NOT_A;
+    return (flood << 1) & NOT_A_FILE;
 }
 
-fn west_attacks(start_const: u64, empty_const: u64) u64 {
+fn westAttacks(start_const: u64, empty_const: u64) u64 {
     var flood: u64 = 0;
     var start: u64 = start_const;
     var empty: u64 = empty_const;
 
-    empty &= NOT_H;
+    empty &= NOT_H_FILE;
     while (start != 0) {
         flood |= start;
         start = (start >> 1) & empty;
     }
 
-    return (flood >> 1) & NOT_H;
+    return (flood >> 1) & NOT_H_FILE;
 }
 
-fn north_east_attacks(start_const: u64, empty_const: u64) u64 {
+fn northEastAttacks(start_const: u64, empty_const: u64) u64 {
     var flood: u64 = 0;
     var start: u64 = start_const;
     var empty: u64 = empty_const;
 
-    empty &= NOT_A;
+    empty &= NOT_A_FILE;
 
     while (start != 0) {
         flood |= start;
         start = (start << 9) & empty;
     }
 
-    return (flood << 9) & NOT_A;
+    return (flood << 9) & NOT_A_FILE;
 
 }
 
-fn north_west_attacks(start_const: u64, empty_const: u64) u64 {
+fn northWestAttacks(start_const: u64, empty_const: u64) u64 {
     var flood: u64 = 0;
     var start: u64 = start_const;
     var empty: u64 = empty_const;
 
-    empty &= NOT_H;
+    empty &= NOT_H_FILE;
 
     while (start != 0) {
         flood |= start;
         start = (start << 7) & empty;
     }
 
-    return (flood << 7) & NOT_H;
+    return (flood << 7) & NOT_H_FILE;
 }
 
-fn south_east_attacks(start_const: u64, empty_const: u64) u64 {
+fn southEastAttacks(start_const: u64, empty_const: u64) u64 {
     var flood: u64 = 0;
     var start: u64 = start_const;
     var empty: u64 = empty_const;
 
-    empty &= NOT_A;
+    empty &= NOT_A_FILE;
 
     while (start != 0) {
         flood |= start;
         start = (start >> 7) & empty;
     }
 
-    return (flood >> 7) & NOT_A;
+    return (flood >> 7) & NOT_A_FILE;
 }
 
-fn south_west_attacks(start_const: u64, empty_const: u64) u64 {
+fn southWestAttacks(start_const: u64, empty_const: u64) u64 {
     var flood: u64 = 0;
     var start: u64 = start_const;
     var empty: u64 = empty_const;
 
-    empty &= NOT_H;
+    empty &= NOT_H_FILE;
 
     while (start != 0) {
         flood |= start;
         start = (start >> 9) & empty;
     }
 
-    return (flood >> 9) & NOT_H;
+    return (flood >> 9) & NOT_H_FILE;
 }

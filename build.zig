@@ -31,11 +31,11 @@ pub fn build(b: *Builder) void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
-    const test_files: [5][]const u8 = [_][]const u8{
-        "src/attack_test.zig",
-        "src/evaluate_test.zig",
-        "src/make_move_test.zig",
-        "src/movegen_test.zig",
+    const test_files: [1][]const u8 = [_][]const u8{
+//        "src/attack_test.zig",
+//        "src/evaluate_test.zig",
+//        "src/make_move_test.zig",
+//        "src/movegen_test.zig",
         "src/position_test.zig"
     };
 

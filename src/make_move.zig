@@ -1,25 +1,46 @@
-const move = @import("./move.zig");
+const Move = @import("./move.zig").Move;
+const MoveType = @import("./move.zig").MoveType;
 const piece = @import("./piece.zig");
 const PieceType = piece.PieceType;
-const Color = piece.Color;
+const Color = @import("./color.zig").Color;
+const color = @import("./color.zig");
 const position = @import("./position.zig");
 const std = @import("std");
+const castling = @import("./castling.zig");
+const CastleSide = @import("./castling.zig").CastleSide;
+usingnamespace @import("./bitboard_ops.zig");
+
 // When making a move, some information about the previous state cannot be
 // recovered from the next state. The moveArtifacts type contains this information.
 pub const MoveArtifacts = struct {
-    halfmove: u8,
+    halfmove: u64,
     castling:  u4,
     en_passant_position: u8,
-    captured: u8,
 };
+
 
 // Makes a quiet move (a regular move with no captures) given the position,
 // origin, and destination.
-fn makeQuietMove(pos: *position.Position, from: u8, to: u8) void {
-    const moved_piece = pos.board[from];
+// This is symmetrical, passing in the same move will unmake the move.
+fn makeQuietMove(pos: *position.Position, m: Move) void {
+    const from_bitboard = bitboardFromIndex(m.from);
+    const to_bitboard = bitboardFromIndex(m.to);
+    const from_to_bitboard = from_bitboard ^ to_bitboard;
 
-    pos.board[from] = 0;
-    pos.board[to] = moved_piece;
+    pos.board.boards[@enumToInt(m.piece_color)] ^= from_to_bitboard;
+    pos.board.boards[@enumToInt(m.piece_type)] ^= from_to_bitboard;
+}
+
+// This is symmetrical, passing in the same move will unmake the move.
+fn makeCapture(pos: *position.Position, m: Move) void {
+    const from_bitboard = bitboardFromIndex(m.from);
+    const to_bitboard = bitboardFromIndex(m.to);
+    const from_to_bitboard = from_bitboard ^ to_bitboard;
+
+    pos.board.boards[@enumToInt(m.piece_color)] ^= from_to_bitboard;
+    pos.board.boards[@enumToInt(m.piece_type)] ^= from_to_bitboard;
+    pos.board.boards[@enumToInt(m.captured_piece_color orelse Color.white)] ^= to_bitboard;
+    pos.board.boards[@enumToInt(m.captured_piece_type orelse PieceType.empty)] ^= to_bitboard;
 }
 
 
@@ -28,135 +49,138 @@ fn makeQuietMove(pos: *position.Position, from: u8, to: u8) void {
 // debugging point of view, it would be impossible to copy the position each
 // time due to memory constraints.
 // makeMove returns the artifacts required to reverse the move later.
-pub fn makeMove(pos: *position.Position, m: u32) MoveArtifacts {
+pub fn makeMove(pos: *position.Position, m: Move) MoveArtifacts {
     // Record the current state in artifacts.
     var artifacts = MoveArtifacts{
         .halfmove =          pos.halfmove,
         .castling =          pos.castling,
         .en_passant_position = pos.en_passant_target,
-        .captured =          0,
     };
-
-    // Extract information from move
-    const from: u8 = move.fromIndex(m);
-    const to: u8 = move.toIndex(m);
-    const moved_piece: u8 = pos.board[from];
-    const moved_piece_type: PieceType = piece.pieceType(moved_piece);
 
     // The new position by default has no en passant target.
     pos.en_passant_target = 0;
 
     // The halfmove counter is reset on a capture, and incremented otherwise.
-    if (move.isCapture(m)) {
+    if (m.is(MoveType.capture)) {
         pos.halfmove = 0;
     } else {
         pos.halfmove += 1;
     }
 
     // If the king or rook are moving, remove castling rights
-    if (moved_piece_type == PieceType.king) {
-        pos.castling = updateCastling(pos.castling, false, pos.to_move, false);
-        pos.castling = updateCastling(pos.castling, true, pos.to_move, false);
+    if (m.piece_type == PieceType.king) {
+        pos.castling = castling.updateCastling(pos.castling, CastleSide.king, m.piece_color, false);
+        pos.castling = castling.updateCastling(pos.castling, CastleSide.queen, m.piece_color, false);
+
+        // If the king is moving, update the king index
+        pos.king_indices[@enumToInt(m.piece_color)] = m.to;
     }
 
-    if (moved_piece_type == PieceType.rook) {
-        if (from == 0 or from == 112) {
-            pos.castling = updateCastling(pos.castling, true, pos.to_move, false);
-        } else if (from == 7 or from == 119) {
-            pos.castling = updateCastling(pos.castling, false, pos.to_move, false);
+    if (m.piece_type == PieceType.rook) {
+        if (m.from == 0 or m.from == 56) {
+            pos.castling = castling.updateCastling(pos.castling, CastleSide.queen, m.piece_color, false);
+        } else if (m.from == 7 or m.from == 63) {
+            pos.castling = castling.updateCastling(pos.castling, CastleSide.king, m.piece_color, false);
         }
     }
+
+    const from_bitboard = bitboardFromIndex(m.from);
+    const to_bitboard = bitboardFromIndex(m.to);
 
     // Determine which type of move to make.
-    if (move.isQuiet(m)) {
-        makeQuietMove(pos, from, to);
+    if (m.is(MoveType.quiet)) {
+        makeQuietMove(pos, m);
 
         // A quiet move resets the halfmove counter if it is made by a pawn.
-        if (moved_piece_type == PieceType.pawn) {
+        if (m.piece_type == PieceType.pawn) {
             pos.halfmove = 0;
         }
-
-    } else if (move.isCastle(m)) {
+    } else if (m.isCastle()) {
         // If the player is castling, remove all castle rights in the future.
-        pos.castling = updateCastling(pos.castling, true, pos.to_move, false);
-        pos.castling = updateCastling(pos.castling, false, pos.to_move, false);
+        pos.castling = castling.updateCastling(pos.castling, CastleSide.queen, m.piece_color, false);
+        pos.castling = castling.updateCastling(pos.castling, CastleSide.king, m.piece_color, false);
 
         // Determine the starting and ending location of the pieces involved.
-        const king_origin: u8 = if (pos.to_move == Color.white) 4 else 116;
-        const rook_origin: u8 = if (move.isQueenCastle(m)) king_origin - 4 else king_origin + 3;
-        const king_final: u8 = if (move.isQueenCastle(m)) king_origin - 2 else king_origin + 2;
-        const rook_final: u8 = if (move.isQueenCastle(m)) king_origin - 1 else king_origin + 1;
+        const king_origin: u8 = if (m.piece_color == Color.white) 4 else 60;
+        const rook_origin: u8 = if (m.is(MoveType.queenside_castle)) king_origin - 4 else king_origin + 3;
+        const king_final: u8 = if (m.is(MoveType.queenside_castle)) king_origin - 2 else king_origin + 2;
+        const rook_final: u8 = if (m.is(MoveType.queenside_castle)) king_origin - 1 else king_origin + 1;
 
         // Swap the pieces in the board.
-        const king = pos.board[king_origin];
-        const rook = pos.board[rook_origin];
-        pos.board[king_origin] = 0;
-        pos.board[rook_origin] = 0;
+        pos.board.set(PieceType.king, m.piece_color, king_final);
+        pos.board.set(PieceType.rook, m.piece_color, rook_final);
+        pos.board.unset(PieceType.king, m.piece_color, king_origin);
+        pos.board.unset(PieceType.rook, m.piece_color, rook_origin);
 
-        pos.board[king_final] = king;
-        pos.board[rook_final] = rook;
+        // If the king is moving, update the king index
+        pos.king_indices[@enumToInt(m.piece_color)] = king_final;
     } else {
-        if (move.isPromotionCapture(m)) {
-            const promotion_piece = move.getPromotedPiece(m, moved_piece);
+        if (m.isPromotionCapture()) {
+            const promotion_piece = m.getPromotedPiece();
 
-            // Save the captured piece in the move artifacts.
-            artifacts.captured = pos.board[to];
+            pos.board.boards[@enumToInt(m.piece_color)] ^= from_bitboard;
+            pos.board.boards[@enumToInt(m.piece_type)] ^= from_bitboard;
+            pos.board.boards[@enumToInt(m.captured_piece_color orelse Color.white)] ^= to_bitboard;
+            pos.board.boards[@enumToInt(m.captured_piece_type orelse PieceType.empty)] ^= to_bitboard;
+            pos.board.boards[@enumToInt(promotion_piece)] ^= to_bitboard;
+            pos.board.boards[@enumToInt(m.piece_color)] ^= to_bitboard;
+        } else if (m.isPromotion()) {
+            const promotion_piece = m.getPromotedPiece();
 
-            pos.board[from] = 0;
-            pos.board[to] = promotion_piece;
-        } else if (move.isPromotion(m)) {
-            const promotion_piece = move.getPromotedPiece(m, moved_piece);
+            const from_to_bitboard = from_bitboard ^ to_bitboard;
 
-            pos.board[from] = 0;
-            pos.board[to] = promotion_piece;
+            pos.board.boards[@enumToInt(m.piece_color)] ^= from_bitboard;
+            pos.board.boards[@enumToInt(m.piece_type)] ^= from_bitboard;
+            pos.board.boards[@enumToInt(promotion_piece)] ^= to_bitboard;
+            pos.board.boards[@enumToInt(m.piece_color)] ^= to_bitboard;
 
             // The halfmove counter is reset on a promotion.
             pos.halfmove = 0;
-        } else if (move.isEnPassantCapture(m)) {
-            pos.board[from] = 0;
-            pos.board[to] = moved_piece;
+        } else if (m.is(MoveType.en_passant)) {
+            const from_to_bitboard = from_bitboard ^ to_bitboard;
+
+            pos.board.boards[@enumToInt(m.piece_color)] ^= from_to_bitboard;
+            pos.board.boards[@enumToInt(m.piece_type)] ^= from_to_bitboard;
 
             // Determine the en passant target, depending on the direction of
             // movement.
-            const capture_index = if (piece.pieceColor(moved_piece) == Color.white) to - 16 else to + 16;
+            const capture_index = if (m.piece_color == Color.white) m.to - 8 else m.to + 8;
 
-            artifacts.captured = pos.board[capture_index];
-            pos.board[capture_index] = 0;
-        } else if (move.isDoublePawnPush(m)) {
-            pos.board[from] = 0;
-            pos.board[to] = moved_piece;
+            pos.board.unset(m.captured_piece_type orelse PieceType.empty, m.captured_piece_color orelse Color.white, capture_index);
+        } else if (m.is(MoveType.double_pawn_push)) {
+            makeQuietMove(pos, m);
 
             // A double pawn push creates an en passant target, which must be
             // saved in the new position.
-            pos.en_passant_target = (from + to) / 2;
+            pos.en_passant_target = (m.from + m.to) / 2;
             pos.halfmove = 0;
-        } else if (move.isCapture(m)) {
-            artifacts.captured = pos.board[to];
-
-            pos.board[from] = 0;
-            pos.board[to] = moved_piece;
+        } else if (m.is(MoveType.capture)) {
+            makeCapture(pos, m);
         }
     }
 
     // If the rook was captured, remove castling rights for that side.
-    if (artifacts.captured != 0 and piece.pieceType(artifacts.captured) == PieceType.rook) {
-        const captured_color = piece.pieceColor(artifacts.captured);
+    if (m.captured_piece_type) |captured_piece_type| {
+        if (captured_piece_type == PieceType.rook) {
+            const captured_color = m.captured_piece_color orelse Color.white;
 
-        if (pos.opponentHasCastleRight(true)) {
-            if (captured_color == Color.white and to == 0) {
-                pos.castling = updateCastling(pos.castling, true, Color.white, false);
-            } else if (captured_color == Color.black and to == 112) {
-                pos.castling = updateCastling(pos.castling, true, Color.black, false);
+            if (castling.hasCastlingRight(pos.castling, color.invert(pos.to_move), CastleSide.queen)) {
+                if (captured_color == Color.white and m.to == 0) {
+                    pos.castling = castling.updateCastling(pos.castling, CastleSide.queen, Color.white, false);
+                } else if (captured_color == Color.black and m.to == 56) {
+                    pos.castling = castling.updateCastling(pos.castling, CastleSide.queen, Color.black, false);
+                }
+            }
+
+            if (castling.hasCastlingRight(pos.castling, color.invert(pos.to_move), CastleSide.king)) {
+                if (captured_color == Color.white and m.to == 7) {
+                    pos.castling = castling.updateCastling(pos.castling, CastleSide.king, Color.white, false);
+                } else if (captured_color == Color.black and m.to == 63) {
+                    pos.castling = castling.updateCastling(pos.castling, CastleSide.king, Color.black, false);
+                }
             }
         }
 
-        if (pos.opponentHasCastleRight(false)) {
-            if (captured_color == Color.white and to == 7) {
-                pos.castling = updateCastling(pos.castling, false, Color.white, false);
-            } else if (captured_color == Color.black and to == 119) {
-                pos.castling = updateCastling(pos.castling, false, Color.black, false);
-            }
-        }
     }
 
     // Increment the fullmove counter when black finishes their turn.
@@ -188,85 +212,66 @@ pub fn unmakeMove(pos: *position.Position, m: u32, artifacts: MoveArtifacts) voi
         pos.to_move = Color.white;
     }
 
-    // Extract information from move
-    const from: u8 = move.fromIndex(m);
-    const to: u8 = move.toIndex(m);
-    const moved_piece: u8 = pos.board[to];
-    const moved_piece_type: PieceType = piece.pieceType(moved_piece);
+    // Reset king position
+    if (m.piece_type == PieceType.king) {
+        pos.king_indices[m.piece_color] = m.from;
+    }
 
-    if (move.isQuiet(m)) {
-        pos.board[to] = 0;
-        pos.board[from] = moved_piece;
-    } else if (move.isCastle(m)) {
+    if (m.is(MoveType.quiet)) {
+        makeQuietMove(pos, m);
+    } else if (move.isCastle()) {
         // Determine the starting and ending location of the pieces involved.
-        const king_origin: u8 = if (pos.to_move == Color.white) 4 else 116;
+        const king_origin: u8 = if (pos.to_move == Color.white) 4 else 60;
         const rook_origin: u8 = if (move.isQueenCastle(m)) king_origin - 4 else king_origin + 3;
         const king_final: u8 = if (move.isQueenCastle(m)) king_origin - 2 else king_origin + 2;
         const rook_final: u8 = if (move.isQueenCastle(m)) king_origin - 1 else king_origin + 1;
 
         // Swap the pieces in the board.
-        const king = pos.board[king_final];
-        const rook = pos.board[rook_final];
-        pos.board[king_final] = 0;
-        pos.board[rook_final] = 0;
+        pos.board.set(PieceType.king, m.piece_color, king_origin);
+        pos.board.set(PieceType.rook, m.piece_color, rook_origin);
+        pos.board.unset(PieceType.king, m.piece_color, king_final);
+        pos.board.unset(PieceType.rook, m.piece_color, rook_final);
 
-        pos.board[king_origin] = king;
-        pos.board[rook_origin] = rook;
+        pos.king_indices[m.piece_color] = king_origin;
     } else {
-        if (move.isPromotionCapture(m)) {
-            // If the move was a promotion capture, recreate the pawn piece that
-            // was replaced by the promoted piece.
-            const pawn: u8 = @enumToInt(piece.pieceColor(moved_piece)) | @enumToInt(PieceType.pawn);
+        if (m.isPromotionCapture()) {
+            const from_bitboard = 1 << from;
+            const to_bitboard = 1 << to;
 
-            pos.board[from] = pawn;
-            pos.board[to] = artifacts.captured;
+            pos.board[m.piece_color] ^= from_bitboard;
+            pos.board[m.piece_type] ^= from_bitboard;
+            pos.board[m.captured_piece_color] ^= to_bitboard;
+            pos.board[m.captured_piece_type] ^= to_bitboard;
+            pos.board[promotion_piece] ^= to_bitboard;
+            pos.board[m.piece_color] ^= to_bitboard;
         } else if (move.isPromotion(m)) {
-            // If the move was a promotion , recreate the pawn piece that was
-            // replaced by the promoted piece.
-            const pawn: u8 = @enumToInt(piece.pieceColor(moved_piece)) | @enumToInt(PieceType.pawn);
+            const from_bitboard = 1 << from;
+            const to_bitboard = 1 << to;
+            const from_to_bitboard = from_bitboard ^ to_bitboard;
 
-            pos.board[from] = pawn;
-            pos.board[to] = 0;
+            pos.board[m.piece_color] ^= from_bitboard;
+            pos.board[m.piece_type] ^= from_bitboard;
+            pos.board[promotion_piece] ^= to_bitboard;
+            pos.board[m.piece_color] ^= to_bitboard;
         } else if (move.isEnPassantCapture(m)) {
-            pos.board[to] = 0;
-            pos.board[from] = moved_piece;
+            const from_bitboard = 1 << from;
+            const to_bitboard = 1 << to;
+            const from_to_bitboard = from_bitboard ^ to_bitboard;
 
-            // Determine the index captured by the en passant, depending on the
-            // direction of movement.
-            const capture_index = if (piece.pieceColor(moved_piece) == Color.white) to - 16 else to + 16;
+            pos.board[m.piece_color] ^= from_to_bitboard;
+            pos.board[m.piece_type] ^= from_to_bitboard;
 
-            // Restore the captured piece.
-            pos.board[capture_index] = artifacts.captured;
+            // Determine the en passant target, depending on the direction of
+            // movement, and recreate the pawn that was captured.
+            const capture_index = if (m.piece_color == Color.white) to - 8 else to + 8;
+
+            pos.board.set(m.captured_piece_color, m.captured_piece_type, capture_index);
         } else if (move.isDoublePawnPush(m)) {
-            pos.board[to] = 0;
-            pos.board[from] = moved_piece;
+            makeQuietMove(pos, m);
 
             pos.en_passant_target = artifacts.en_passant_position;
         } else if (move.isCapture(m)) {
-            pos.board[from] = moved_piece;
-            pos.board[to] = artifacts.captured;
+            makeCapture(pos, m);
         }
     }
-}
-
-// Updates the castling nibble
-fn updateCastling(castling: u4, queenside: bool, color: Color, can_castle: bool) u4 {
-    var new_castling: u4 = castling;
-    var offset: u3 = 3;
-
-    if (queenside) {
-        offset -= 1;
-    }
-
-    if (color == Color.black) {
-        offset -= 2;
-    }
-
-    if (can_castle) {
-        new_castling |= @intCast(u4, @shlExact(@intCast(u8, 1), offset));
-    } else {
-        new_castling &= @truncate(u4, ~@shlExact(@intCast(u8, 1), offset));
-    }
-
-    return new_castling;
 }
