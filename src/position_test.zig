@@ -77,7 +77,7 @@ test "fromFEN - starting board" {
                 .en_passant_target = 0,
                 .halfmove = 0,
                 .fullmove = 1,
-                .king_indices = [2]u8{0, 0},
+                .king_indices = [2]u8{4, 60},
             }
         )
     );

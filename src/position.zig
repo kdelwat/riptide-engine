@@ -77,13 +77,13 @@ pub fn fromFEN(fen: []const u8) !Position {
 pub fn fromFENStruct(fen: Fen) Position {
     // First, set up the board position.
     var board = Bitboard.init();
-    var rank_index: u8 = 0;
+    var rank_index: u8 = 7;
     var file_index: u8 = 0;
     var king_indices = [2]u8{0,0};
     for (fen.board) |c| {
         // Skip the slashes which separate ranks
         if (c == '/') {
-            rank_index += 1;
+            rank_index -= 1;
             file_index = 0;
             continue;
         }
@@ -99,10 +99,11 @@ pub fn fromFENStruct(fen: Fen) Position {
             const piece_type = pieceTypeFromFenCode(c);
 
             if (piece_type == PieceType.king) {
+                std.debug.print("file: {}, rank: {}, color: {}\n", .{file_index, rank_index, piece_color});
                 king_indices[@enumToInt(piece_color)] = bitboardIndex(file_index, rank_index);
             }
 
-            board.setFR(piece_type, piece_color, file_index, rank_index);
+            board.setFR(piece_type, piece_color, file_index, 7 - rank_index);
             file_index += 1;
         }
     }
@@ -126,7 +127,7 @@ pub fn fromFENStruct(fen: Fen) Position {
     var en_passant_target: u8 = 0;
     if (fen.en_passant[0] != '-') {
         const file = fen.en_passant[0] - 'a';
-        const rank = fen.en_passant[1] - '0';
+        const rank = fen.en_passant[1] - '1';
 
         en_passant_target = bitboardIndex(file, rank);
     }
