@@ -5,7 +5,6 @@ const PieceType = piece.PieceType;
 const Color = @import("./color.zig").Color;
 const color = @import("./color.zig");
 const position = @import("./position.zig");
-const std = @import("std");
 const castling = @import("./castling.zig");
 const CastleSide = @import("./castling.zig").CastleSide;
 usingnamespace @import("./bitboard_ops.zig");
@@ -36,7 +35,6 @@ fn makeCapture(pos: *position.Position, m: Move) void {
     const from_bitboard = bitboardFromIndex(m.from);
     const to_bitboard = bitboardFromIndex(m.to);
     const from_to_bitboard = from_bitboard ^ to_bitboard;
-    std.debug.print("\n\nfrom_to_bitboard: {b}\n\n", .{from_to_bitboard});
 
     pos.board.boards[@enumToInt(m.piece_color)] ^= from_to_bitboard;
     pos.board.boards[@enumToInt(m.piece_type)] ^= from_to_bitboard;
@@ -90,7 +88,6 @@ pub fn makeMove(pos: *position.Position, m: Move) MoveArtifacts {
 
     // Determine which type of move to make.
     if (m.is(MoveType.quiet)) {
-        std.debug.print("quiet\n", .{});
         makeQuietMove(pos, m);
 
         // A quiet move resets the halfmove counter if it is made by a pawn.
@@ -98,8 +95,6 @@ pub fn makeMove(pos: *position.Position, m: Move) MoveArtifacts {
             pos.halfmove = 0;
         }
     } else if (m.isCastle()) {
-        std.debug.print("castle\n", .{});
-
         // If the player is castling, remove all castle rights in the future.
         pos.castling = castling.updateCastling(pos.castling, CastleSide.queen, m.piece_color, false);
         pos.castling = castling.updateCastling(pos.castling, CastleSide.king, m.piece_color, false);
@@ -119,8 +114,6 @@ pub fn makeMove(pos: *position.Position, m: Move) MoveArtifacts {
         // If the king is moving, update the king index
         pos.king_indices[@enumToInt(m.piece_color)] = king_final;
     } else if (m.isPromotionCapture()) {
-        std.debug.print("promo capture\n", .{});
-
         const promotion_piece = m.getPromotedPiece();
 
         pos.board.boards[@enumToInt(m.piece_color)] ^= from_bitboard;
@@ -130,8 +123,6 @@ pub fn makeMove(pos: *position.Position, m: Move) MoveArtifacts {
         pos.board.boards[@enumToInt(promotion_piece)] ^= to_bitboard;
         pos.board.boards[@enumToInt(m.piece_color)] ^= to_bitboard;
     } else if (m.isPromotion()) {
-        std.debug.print("promo\n", .{});
-
         const promotion_piece = m.getPromotedPiece();
 
         const from_to_bitboard = from_bitboard ^ to_bitboard;
@@ -144,8 +135,6 @@ pub fn makeMove(pos: *position.Position, m: Move) MoveArtifacts {
         // The halfmove counter is reset on a promotion.
         pos.halfmove = 0;
     } else if (m.is(MoveType.en_passant)) {
-        std.debug.print("en_passant\n", .{});
-
         const from_to_bitboard = from_bitboard ^ to_bitboard;
 
         pos.board.boards[@enumToInt(m.piece_color)] ^= from_to_bitboard;
@@ -157,8 +146,6 @@ pub fn makeMove(pos: *position.Position, m: Move) MoveArtifacts {
 
         pos.board.unset(m.captured_piece_type orelse PieceType.empty, m.captured_piece_color orelse Color.white, capture_index);
     } else if (m.is(MoveType.double_pawn_push)) {
-        std.debug.print("double push\n", .{});
-
         makeQuietMove(pos, m);
 
         // A double pawn push creates an en passant target, which must be
@@ -166,8 +153,6 @@ pub fn makeMove(pos: *position.Position, m: Move) MoveArtifacts {
         pos.en_passant_target = (m.from + m.to) / 2;
         pos.halfmove = 0;
     } else if (m.is(MoveType.capture)) {
-        std.debug.print("capture\n", .{});
-
         makeCapture(pos, m);
     } else {
         unreachable;

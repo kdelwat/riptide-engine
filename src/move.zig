@@ -42,6 +42,26 @@ pub const Move = struct {
         };
     }
 
+    pub fn initQueensideCastle(piece_color: Color) Move {
+        return Move{
+            .from = 0,
+            .to = 0,
+            .piece_color = piece_color,
+            .piece_type = PieceType.empty,
+            .move_type = MoveType.queenside_castle,
+        };
+    }
+
+    pub fn initKingsideCastle(piece_color: Color) Move {
+        return Move{
+            .from = 0,
+            .to = 0,
+            .piece_color = piece_color,
+            .piece_type = PieceType.empty,
+            .move_type = MoveType.kingside_castle,
+        };
+    }
+
     pub fn initDoublePawnPush(from: u8, to: u8, piece_color: Color) Move {
         var move = Move.initQuiet(from, to, piece_color, PieceType.pawn);
         move.move_type = MoveType.double_pawn_push;
@@ -69,7 +89,7 @@ pub const Move = struct {
         return move;
     }
 
-    pub fn initPromotionCapture(from: u8, to: u8, piece_color: Color, promote_to: PieceType, captured_piece_color: Color, captured_piece_type: PieceType) Move {
+    pub fn initPromotionCapture(from: u8, to: u8, piece_color: Color, promote_to: PieceType, captured_piece_type: PieceType) Move {
         var move = Move.initQuiet(from, to, piece_color, PieceType.pawn);
         move.move_type = switch (promote_to) {
             .knight => .knight_promo_capture,
@@ -78,7 +98,7 @@ pub const Move = struct {
             .queen => .queen_promo_capture,
             else => unreachable,
         };
-        move.captured_piece_color = captured_piece_color;
+        move.captured_piece_color = color.invert(piece_color);
         move.captured_piece_type = captured_piece_type;
 
         return move;
