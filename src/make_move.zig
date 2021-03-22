@@ -62,7 +62,7 @@ pub fn makeMove(pos: *position.Position, m: Move) MoveArtifacts {
     pos.en_passant_target = 0;
 
     // The halfmove counter is reset on a capture, and incremented otherwise.
-    if (m.is(MoveType.capture)) {
+    if (m.isCapture()) {
         pos.halfmove = 0;
     } else {
         pos.halfmove += 1;

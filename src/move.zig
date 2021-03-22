@@ -2,6 +2,7 @@ const piece = @import("./piece.zig");
 const PieceType = piece.PieceType;
 const std = @import("std");
 const Color = @import("./color.zig").Color;
+const color = @import("./color.zig");
 
 pub const MoveType = enum(u4) {
     quiet                = 0b0000,
@@ -55,27 +56,27 @@ pub const Move = struct {
         return move;
     }
 
-    pub fn initPromotion(from: u8, to: u8, piece_color: Color, piece_type: PieceType, promote_to: PieceType) Move {
-        var move = Move.initQuiet(from, to, piece_color, piece_type);
+    pub fn initPromotion(from: u8, to: u8, piece_color: Color, promote_to: PieceType) Move {
+        var move = Move.initQuiet(from, to, piece_color, PieceType.pawn);
         move.move_type = switch (promote_to) {
-            PieceType.knight => knight_promo,
-            PieceType.bishop => bishop_promo,
-            PieceType.rook => rook_promo,
-            PieceType.queen => queen_promo,
-            else => 0,
+            .knight => .knight_promo,
+            .bishop => .bishop_promo,
+            .rook => .rook_promo,
+            .queen => .queen_promo,
+            else => unreachable,
         };
 
         return move;
     }
 
-    pub fn initPromotionCapture(from: u8, to: u8, piece_color: Color, piece_type: PieceType, promote_to: PieceType, captured_piece_color: Color, captured_piece_type: PieceType) Move {
-        var move = Move.initQuiet(from, to, piece_color, piece_type);
+    pub fn initPromotionCapture(from: u8, to: u8, piece_color: Color, promote_to: PieceType, captured_piece_color: Color, captured_piece_type: PieceType) Move {
+        var move = Move.initQuiet(from, to, piece_color, PieceType.pawn);
         move.move_type = switch (promote_to) {
-            PieceType.knight => knight_promo_capture,
-            PieceType.bishop => bishop_promo_capture,
-            PieceType.rook => rook_promo_capture,
-            PieceType.queen => queen_promo_capture,
-            else => 0,
+            .knight => .knight_promo_capture,
+            .bishop => .bishop_promo_capture,
+            .rook => .rook_promo_capture,
+            .queen => .queen_promo_capture,
+            else => unreachable,
         };
         move.captured_piece_color = captured_piece_color;
         move.captured_piece_type = captured_piece_type;
@@ -86,6 +87,9 @@ pub const Move = struct {
     pub fn initEnPassant(from: u8, to: u8, piece_color: Color) Move {
         var move = Move.initQuiet(from, to, piece_color, PieceType.pawn);
         move.move_type = MoveType.en_passant;
+        move.captured_piece_color = color.invert(piece_color);
+        move.captured_piece_type = PieceType.pawn;
+
         return move;
     }
 
@@ -103,6 +107,10 @@ pub const Move = struct {
 
     pub fn isPromotionCapture(self: Move) bool {
         return @enumToInt(self.move_type) & 0b1100 == 0b1100;
+    }
+
+    pub fn isCapture(self: Move) bool {
+        return @enumToInt(self.move_type) & 0b0100 == 0b0100;
     }
 
     pub fn getPromotedPiece(self: Move) PieceType {
