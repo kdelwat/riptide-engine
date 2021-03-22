@@ -1,7 +1,7 @@
-const piece = @import("./piece.zig");
-const Color = piece.Color;
-const PieceType = piece.PieceType;
+const PieceType = @import("./piece.zig").PieceType;
+const Color = @import("./color.zig").Color;
 const position = @import("./position.zig");
+usingnamespace @import("./bitboard_ops.zig");
 
 // These constants specify the value, in centipawns, of each piece when evaluating a position.
 // A piece's value is a combination of its base weight and a modifier based on its position on the board. This reflects more subtle information about a position. For example, a knight in the centre of the board is more effective than one on the side, so it recieves a bonus.
@@ -16,68 +16,68 @@ const pawn_weight: i64 = 100;
 
 const pawn_positions = [64]i64{
     0, 0, 0, 0, 0, 0, 0, 0,
-    50, 50, 50, 50, 50, 50, 50, 50,
-    10, 10, 20, 30, 30, 20, 10, 10,
-    5, 5, 10, 25, 25, 10, 5, 5,
-    0, 0, 0, 20, 20, 0, 0, 0,
-    5, -5, -10, 0, 0, -10, -5, 5,
     5, 10, 10, -20, -20, 10, 10, 5,
+    5, -5, -10, 0, 0, -10, -5, 5,
+    0, 0, 0, 20, 20, 0, 0, 0,
+    5, 5, 10, 25, 25, 10, 5, 5,
+    10, 10, 20, 30, 30, 20, 10, 10,
+    50, 50, 50, 50, 50, 50, 50, 50,
     0, 0, 0, 0, 0, 0, 0, 0,
 };
 
 const knight_positions = [64]i64{
     -50, -40, -30, -30, -30, -30, -40, -50,
-    -40, -20, 0, 0, 0, 0, -20, -40,
-    -30, 0, 10, 15, 15, 10, 0, -30,
-    -30, 5, 15, 20, 20, 15, 5, -30,
-    -30, 0, 15, 20, 20, 15, 0, -30,
-    -30, 5, 10, 15, 15, 10, 5, -30,
     -40, -20, 0, 5, 5, 0, -20, -40,
+    -30, 5, 10, 15, 15, 10, 5, -30,
+    -30, 0, 15, 20, 20, 15, 0, -30,
+    -30, 5, 15, 20, 20, 15, 5, -30,
+    -30, 0, 10, 15, 15, 10, 0, -30,
+    -40, -20, 0, 0, 0, 0, -20, -40,
     -50, -40, -30, -30, -30, -30, -40, -50,
 };
 
 const bishop_positions = [64]i64{
     -20, -10, -10, -10, -10, -10, -10, -20,
-    -10, 0, 0, 0, 0, 0, 0, -10,
-    -10, 0, 5, 10, 10, 5, 0, -10,
-    -10, 5, 5, 10, 10, 5, 5, -10,
-    -10, 0, 10, 10, 10, 10, 0, -10,
-    -10, 10, 10, 10, 10, 10, 10, -10,
     -10, 5, 0, 0, 0, 0, 5, -10,
+    -10, 10, 10, 10, 10, 10, 10, -10,
+    -10, 0, 10, 10, 10, 10, 0, -10,
+    -10, 5, 5, 10, 10, 5, 5, -10,
+    -10, 0, 5, 10, 10, 5, 0, -10,
+    -10, 0, 0, 0, 0, 0, 0, -10,
     -20, -10, -10, -10, -10, -10, -10, -20,
 };
 
 const rook_positions = [64]i64{
-    0, 0, 0, 0, 0, 0, 0, 0,
-    5, 10, 10, 10, 10, 10, 10, 5,
-    -5, 0, 0, 0, 0, 0, 0, -5,
-    -5, 0, 0, 0, 0, 0, 0, -5,
-    -5, 0, 0, 0, 0, 0, 0, -5,
-    -5, 0, 0, 0, 0, 0, 0, -5,
-    -5, 0, 0, 0, 0, 0, 0, -5,
     0, 0, 0, 5, 5, 0, 0, 0,
+    -5, 0, 0, 0, 0, 0, 0, -5,
+    -5, 0, 0, 0, 0, 0, 0, -5,
+    -5, 0, 0, 0, 0, 0, 0, -5,
+    -5, 0, 0, 0, 0, 0, 0, -5,
+    -5, 0, 0, 0, 0, 0, 0, -5,
+    5, 10, 10, 10, 10, 10, 10, 5,
+    0, 0, 0, 0, 0, 0, 0, 0,
 };
 
 const queen_positions = [64]i64{
     -20, -10, -10, -5, -5, -10, -10, -20,
-    -10, 0, 0, 0, 0, 0, 0, -10,
-    -10, 0, 5, 5, 5, 5, 0, -10,
-    -5, 0, 5, 5, 5, 5, 0, -5,
-    0, 0, 5, 5, 5, 5, 0, -5,
-    -10, 5, 5, 5, 5, 5, 0, -10,
     -10, 0, 5, 0, 0, 0, 0, -10,
+    -10, 5, 5, 5, 5, 5, 0, -10,
+    0, 0, 5, 5, 5, 5, 0, -5,
+    -5, 0, 5, 5, 5, 5, 0, -5,
+    -10, 0, 5, 5, 5, 5, 0, -10,
+    -10, 0, 0, 0, 0, 0, 0, -10,
     -20, -10, -10, -5, -5, -10, -10, -20,
 };
 
 const king_positions = [64]i64{
-    -30, -40, -40, -50, -50, -40, -40, -30,
-    -30, -40, -40, -50, -50, -40, -40, -30,
-    -30, -40, -40, -50, -50, -40, -40, -30,
-    -30, -40, -40, -50, -50, -40, -40, -30,
-    -20, -30, -30, -40, -40, -30, -30, -20,
-    -10, -20, -20, -20, -20, -20, -20, -10,
-    20, 20, 0, 0, 0, 0, 20, 20,
     20, 30, 10, 0, 0, 10, 30, 20,
+    20, 20, 0, 0, 0, 0, 20, 20,
+    -10, -20, -20, -20, -20, -20, -20, -10,
+    -20, -30, -30, -40, -40, -30, -30, -20,
+    -30, -40, -40, -50, -50, -40, -40, -30,
+    -30, -40, -40, -50, -50, -40, -40, -30,
+    -30, -40, -40, -50, -50, -40, -40, -30,
+    -30, -40, -40, -50, -50, -40, -40, -30,
 };
 
 
@@ -88,58 +88,35 @@ const king_positions = [64]i64{
 // Since the move search function uses the Negamax algorithm, this evaluation is
 // symmetrical. A position for black is the same as the identical one for white,
 // but negated.
-pub fn evaluate(pos: position.Position) i64 {
+pub fn evaluate(pos: *position.Position) i64 {
     var score: i64 = 0;
 
-    // Loop through the board, finding the score for each piece present. If the
-    // piece is white, add it to the total; if black, subtract it.
-    var i: u16 = 0;
-    while (i < position.BOARD_SIZE) {
-        const p = pos.board[i];
-        if (position.isOnBoard(i) and pos.pieceOn(i)) {
-            const increment: i64 = switch(piece.pieceColor(p)) {
-                Color.white => 1,
-                Color.black => -1,
-            };
-
-            const piecemap_index = map0x88ToPiecemap(i, piece.pieceColor(p));
-
-            score += switch (piece.pieceType(p)) {
-                PieceType.king =>
-                    (king_weight + king_positions[piecemap_index]) * increment,
-                PieceType.queen =>
-                    (queen_weight + queen_positions[piecemap_index]) * increment,
-                PieceType.bishop =>
-                    (bishop_weight + bishop_positions[piecemap_index]) * increment,
-                PieceType.rook =>
-                    (rook_weight + rook_positions[piecemap_index]) * increment,
-                PieceType.knight =>
-                    (knight_weight + knight_positions[piecemap_index]) * increment,
-                PieceType.pawn =>
-                    (pawn_weight + pawn_positions[piecemap_index]) * increment,
-                PieceType.empty => 0,
-            };
-        }
-
-        i += 1;
-    }
+    score += evaluate_bitboard(pos.board.get(PieceType.king, Color.white), king_positions, king_weight);
+    score += evaluate_bitboard(pos.board.get(PieceType.queen, Color.white), queen_positions, queen_weight);
+    score += evaluate_bitboard(pos.board.get(PieceType.bishop, Color.white), bishop_positions, bishop_weight);
+    score += evaluate_bitboard(pos.board.get(PieceType.rook, Color.white), rook_positions, rook_weight);
+    score += evaluate_bitboard(pos.board.get(PieceType.knight, Color.white), knight_positions, knight_weight);
+    score += evaluate_bitboard(pos.board.get(PieceType.pawn, Color.white), pawn_positions, pawn_weight);
+    score -= evaluate_bitboard(pos.board.get(PieceType.king, Color.black), king_positions, king_weight);
+    score -= evaluate_bitboard(pos.board.get(PieceType.queen, Color.black), queen_positions, queen_weight);
+    score -= evaluate_bitboard(pos.board.get(PieceType.bishop, Color.black), bishop_positions, bishop_weight);
+    score -= evaluate_bitboard(pos.board.get(PieceType.rook, Color.black), rook_positions, rook_weight);
+    score -= evaluate_bitboard(pos.board.get(PieceType.knight, Color.black), knight_positions, knight_weight);
+    score -= evaluate_bitboard(pos.board.get(PieceType.pawn, Color.black), pawn_positions, pawn_weight);
 
     return score * switch (pos.to_move) {
-        Color.white => @intCast(i64, 1),
-        Color.black => @intCast(i64, -1),
+        Color.white => @as(i64, 1),
+        Color.black => @as(i64, -1),
     };
 }
 
-// Map a 0x88 index to the required position in the score piecemaps. The
-// direction (1 for white, -1 for black) is required because the indices are
-// asymmetrical in 0x88 but symmetrical in the piecemap.
-fn map0x88ToPiecemap(index: usize, to_move: Color) u64 {
-    var rank = index / 16;
-    const file = index % 16;
-
-    if (to_move == Color.white) {
-        rank = 7 - rank;
+fn evaluate_bitboard(board: u64, score_table: [64]i64, piece_type_constant: i64) i64 {
+    var score: i64 = 0;
+    var scan_board = board;
+    while (scan_board != 0) {
+        const index = bitscanForwardAndReset(&scan_board);
+        score += piece_type_constant + score_table[index];
     }
 
-    return rank * 8 + file;
+    return score;
 }
