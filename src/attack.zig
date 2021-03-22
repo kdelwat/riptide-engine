@@ -28,7 +28,7 @@ fn generateKingAttackArray() [64]u64 {
     return array;
 }
 
-const KING_ATTACKS: [64]u64 = comptime generateKingAttackArray();
+pub const KING_ATTACKS: [64]u64 = comptime generateKingAttackArray();
 
 // Knight attack indices, based on https://www.chessprogramming.org/Knight_Pattern#KnightAttacks
 // We can generate the final KNIGHT_ATTACKS array at compile time, which gives an attack
@@ -135,7 +135,7 @@ pub fn isSquareAttacked(attack_map: u64, index: u8) bool {
     return (attack_map & (@as(u64, 1) << @truncate(u6, index))) > 0;
 }
 
-fn southAttacks(start_const: u64, empty: u64) u64 {
+pub fn southAttacks(start_const: u64, empty: u64) u64 {
     var flood: u64 = 0;
     var start: u64 = start_const;
 
@@ -147,7 +147,7 @@ fn southAttacks(start_const: u64, empty: u64) u64 {
     return flood >> 8;
 }
 
-fn northAttacks(start_const: u64, empty: u64) u64 {
+pub fn northAttacks(start_const: u64, empty: u64) u64 {
     var flood: u64 = 0;
     var start: u64 = start_const;
 
@@ -159,7 +159,7 @@ fn northAttacks(start_const: u64, empty: u64) u64 {
     return flood << 8;
 }
 
-fn eastAttacks(start_const: u64, empty_const: u64) u64 {
+pub fn eastAttacks(start_const: u64, empty_const: u64) u64 {
     var flood: u64 = 0;
     var start: u64 = start_const;
     var empty: u64 = empty_const;
@@ -173,7 +173,7 @@ fn eastAttacks(start_const: u64, empty_const: u64) u64 {
     return (flood << 1) & NOT_A_FILE;
 }
 
-fn westAttacks(start_const: u64, empty_const: u64) u64 {
+pub fn westAttacks(start_const: u64, empty_const: u64) u64 {
     var flood: u64 = 0;
     var start: u64 = start_const;
     var empty: u64 = empty_const;
@@ -187,7 +187,7 @@ fn westAttacks(start_const: u64, empty_const: u64) u64 {
     return (flood >> 1) & NOT_H_FILE;
 }
 
-fn northEastAttacks(start_const: u64, empty_const: u64) u64 {
+pub fn northEastAttacks(start_const: u64, empty_const: u64) u64 {
     var flood: u64 = 0;
     var start: u64 = start_const;
     var empty: u64 = empty_const;
@@ -203,7 +203,7 @@ fn northEastAttacks(start_const: u64, empty_const: u64) u64 {
 
 }
 
-fn northWestAttacks(start_const: u64, empty_const: u64) u64 {
+pub fn northWestAttacks(start_const: u64, empty_const: u64) u64 {
     var flood: u64 = 0;
     var start: u64 = start_const;
     var empty: u64 = empty_const;
@@ -218,7 +218,7 @@ fn northWestAttacks(start_const: u64, empty_const: u64) u64 {
     return (flood << 7) & NOT_H_FILE;
 }
 
-fn southEastAttacks(start_const: u64, empty_const: u64) u64 {
+pub fn southEastAttacks(start_const: u64, empty_const: u64) u64 {
     var flood: u64 = 0;
     var start: u64 = start_const;
     var empty: u64 = empty_const;
@@ -233,7 +233,7 @@ fn southEastAttacks(start_const: u64, empty_const: u64) u64 {
     return (flood >> 7) & NOT_A_FILE;
 }
 
-fn southWestAttacks(start_const: u64, empty_const: u64) u64 {
+pub fn southWestAttacks(start_const: u64, empty_const: u64) u64 {
     var flood: u64 = 0;
     var start: u64 = start_const;
     var empty: u64 = empty_const;

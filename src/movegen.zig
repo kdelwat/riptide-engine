@@ -5,37 +5,43 @@ const position = @import("./position.zig");
 const piece = @import("./piece.zig");
 const PieceType = piece.PieceType;
 const Color = @import("./color.zig").Color;
-const move = @import("./move.zig");
+const color = @import("./color.zig");
+const Move = @import("./move.zig").Move;
 const make_move = @import("./make_move.zig");
 const attack = @import("./attack.zig");
 const debug = @import("./debug.zig");
+const castling = @import("./castling.zig");
+usingnamespace @import("./bitboard_ops.zig");
 
 // Generate legal moves for a position.
-pub fn generateLegalMoves(moves: *ArrayList(u32), pos: *position.Position) void {
+pub fn generateLegalMoves(moves: *ArrayList(?Move), pos: *position.Position) void {
     const attacker: Color = switch (pos.to_move) {
         Color.white => Color.black,
         Color.black => Color.white,
     };
 
-    generateMoves(moves, pos.*);
+    generateMoves(moves, pos);
 
     const current_player = pos.to_move;
 
     // For each pseudo-legal move, make the move, then see if the king is in
     // check. If it isn't, the move is legal.
-    for (moves.items) |m, i| {
-        const artifacts = make_move.makeMove(pos, m);
+    for (moves.items) |opt_m, i| {
+        // TODO: additional overhead not needed
+        if (opt_m) |m| {
+            const artifacts = make_move.makeMove(pos, m);
 
-        const attack_map = attack.generateAttackMap(&pos, attacker);
-        if (isKingInCheck(pos.*, current_player, attack_map)) {
-            moves.items[i] = move.NULL_MOVE;
+            const attack_map = attack.generateAttackMap(pos, attacker);
+            if (isKingInCheck(pos.*, current_player, attack_map)) {
+                moves.items[i] = null;
+            }
+
+            make_move.unmakeMove(pos, m, artifacts);
         }
-
-        make_move.unmakeMove(pos, m, artifacts);
     }
 }
 
-pub fn countNonNullMoves(moves: *ArrayList(u32)) u32 {
+pub fn countNonNullMoves(moves: *ArrayList(?Move)) u32 {
     var count: u32 = 0;
 
     for (moves.items) |m| {
@@ -46,13 +52,13 @@ pub fn countNonNullMoves(moves: *ArrayList(u32)) u32 {
 }
 
 // Generate pseudo-legal moves for a position
-pub fn generateMoves(moves: *ArrayList(u32), pos: position.Position) void {
-    generatePawnMoves(moves, pos);
-    generatePawnCaptures(moves, pos);
-    generateKnightMoves(moves, pos);
-    generateKingMoves(moves, pos);
-    generateCastlingMoves(moves, pos);
-    generateSlidingMoves(moves, pos);
+pub fn generateMoves(moves: *ArrayList(?Move), pos: *position.Position) void {
+    generatePawnMoves(moves, pos) catch unreachable;
+    generatePawnCaptures(moves, pos) catch unreachable;
+    generateKnightMoves(moves, pos) catch unreachable;
+    generateKingMoves(moves, pos) catch unreachable;
+    generateCastlingMoves(moves, pos) catch unreachable;
+    generateSlidingMoves(moves, pos) catch unreachable;
 }
 
 // Generate all non-capture pawn moves, including non-capture promotions
@@ -62,135 +68,140 @@ pub fn generateMoves(moves: *ArrayList(u32), pos: position.Position) void {
 const RANK_4: u64 = 0x00000000FF000000;
 const RANK_5: u64 = 0x000000FF00000000;
 
-fn generatePawnMoves(moves: *ArrayList(u32), pos: position.Position) !void {
+fn generatePawnMoves(moves: *ArrayList(?Move), pos: *position.Position) !void {
     const empty = pos.board.empty();
     const pawns = pos.board.get(PieceType.pawn, pos.to_move);
 
-    const single_push = switch(pos.to_move) {
+    var single_push = switch(pos.to_move) {
         Color.white => northOne(pawns) & pos.board.empty(),
         Color.black => southOne(pawns) & pos.board.empty(),
     };
 
-    const double_push = switch(pos.to_move) {
+    var double_push = switch(pos.to_move) {
         Color.white => northOne(single_push) & empty & RANK_4,
         Color.black => southOne(single_push) & empty & RANK_5,
     };
 
     const promotion_rank = switch(pos.to_move) {
-        Color.white => 7,
-        Color.black => 0,
+        Color.white => @as(u8, 7),
+        Color.black => @as(u8, 0),
     };
 
     // If the single push results in a pawn ending up on the final rank, generate
     // promotion moves. Otherwise generate a quiet push.
-    while (single_push) {
-        const to = bitScanAndReset(&single_push);
+    while (single_push != 0) {
+        const to = bitscanForwardAndReset(&single_push);
         const from = to - 8;
 
-        if (bitboard.isOnRank(to, promotion_rank)) {
-            try moves.append(move.createPromotionMove(from, to, PieceType.queen));
-            try moves.append(move.createPromotionMove(from, to, PieceType.knight));
-            try moves.append(move.createPromotionMove(from, to, PieceType.rook));
-            try moves.append(move.createPromotionMove(from, to, PieceType.bishop));
+        if (isOnRank(to, promotion_rank)) {
+            try moves.append(Move.initPromotion(from, to, pos.to_move, PieceType.queen));
+            try moves.append(Move.initPromotion(from, to, pos.to_move, PieceType.knight));
+            try moves.append(Move.initPromotion(from, to, pos.to_move, PieceType.rook));
+            try moves.append(Move.initPromotion(from, to, pos.to_move, PieceType.bishop));
         } else {
-            try moves.append(move.createQuietMove(from, to));
+            try moves.append(Move.initQuiet(from, to, pos.to_move, PieceType.pawn));
         }
     }
 
     // Generate double push moves.
-    while (double_push) {
-        const to = bitScanAndReset(&double_push);
+    while (double_push != 0) {
+        const to = bitscanForwardAndReset(&double_push);
         const from = to - 16;
-        try moves.append(move.createDoublePawnPush(from, to));
+        try moves.append(Move.initDoublePawnPush(from, to, pos.to_move));
     }
 }
 
-fn generatePawnCaptures(moves: *ArrayList(u32), pos: position.Position) !void {
+fn generatePawnCaptures(moves: *ArrayList(?Move), pos: *position.Position) !void {
     var opponent_pieces = pos.board.getColor(color.invert(pos.to_move));
 
-    if (pos.en_passant_target) {
-        opponent_pieces |= (1 << pos.en_passant_target);
+    if (pos.en_passant_target != 0) {
+        opponent_pieces |= bitboardFromIndex(pos.en_passant_target);
     }
 
     const pawns = pos.board.get(PieceType.pawn, pos.to_move);
 
-    const east_captures = switch(pos.to_move) {
+    var east_captures = switch(pos.to_move) {
         Color.white => northEastOne(pawns) & opponent_pieces,
         Color.black => southEastOne(pawns) & opponent_pieces,
     };
 
-    const west_captures = switch(pos.to_move) {
+    var west_captures = switch(pos.to_move) {
         Color.white => northWestOne(pawns) & opponent_pieces,
         Color.black => southWestOne(pawns) & opponent_pieces,
     };
 
     const promotion_rank = switch(pos.to_move) {
-        Color.white => 7,
-        Color.black => 0,
+        Color.white => @as(u8, 7),
+        Color.black => @as(u8, 0),
     };
 
     // If the capture results in a pawn ending up on the final rank, generate
     // promotion capture moves. Otherwise generate a capture move.
-    while (east_captures) {
-        const to = bitScanAndReset(&east_captures);
+    while (east_captures != 0) {
+        const to = bitscanForwardAndReset(&east_captures);
         const from = to - 7; // TODO: might be wrong way around
 
-        if (bitboard.isOnRank(to, promotion_rank)) {
-            try moves.append(move.createPromotionCaptureMove(from, to, PieceType.queen));
-            try moves.append(move.createPromotionCaptureMove(from, to, PieceType.knight));
-            try moves.append(move.createPromotionCaptureMove(from, to, PieceType.rook));
-            try moves.append(move.createPromotionCaptureMove(from, to, PieceType.bishop));
+        const captured_piece_type = pos.board.getPieceTypeAt(to);
+
+        if (isOnRank(to, promotion_rank)) {
+            try moves.append(Move.initPromotionCapture(from, to, pos.to_move, PieceType.queen, captured_piece_type));
+            try moves.append(Move.initPromotionCapture(from, to, pos.to_move, PieceType.knight, captured_piece_type));
+            try moves.append(Move.initPromotionCapture(from, to, pos.to_move, PieceType.rook, captured_piece_type));
+            try moves.append(Move.initPromotionCapture(from, to, pos.to_move, PieceType.bishop, captured_piece_type));
         } else if (to == pos.en_passant_target) {
-            try moves.append(move.createEnPassantCaptureMove(from, to));
+            try moves.append(Move.initEnPassant(from, to, pos.to_move));
         } else {
-            try moves.append(move.createCaptureMove(from, to));
+            try moves.append(Move.initCapture(from, to, pos.to_move, PieceType.pawn, captured_piece_type));
         }
     }
 
-    while (west_captures) {
-        const to = bitScanAndReset(&west_captures);
+    while (west_captures != 0) {
+        const to = bitscanForwardAndReset(&west_captures);
         const from = to - 9; // TODO: might be wrong way around
 
-        if (bitboard.isOnRank(to, promotion_rank)) {
-            try moves.append(move.createPromotionCaptureMove(from, to, PieceType.queen));
-            try moves.append(move.createPromotionCaptureMove(from, to, PieceType.knight));
-            try moves.append(move.createPromotionCaptureMove(from, to, PieceType.rook));
-            try moves.append(move.createPromotionCaptureMove(from, to, PieceType.bishop));
+        const captured_piece_type = pos.board.getPieceTypeAt(to);
+
+        if (isOnRank(to, promotion_rank)) {
+            try moves.append(Move.initPromotionCapture(from, to, pos.to_move, PieceType.queen, captured_piece_type));
+            try moves.append(Move.initPromotionCapture(from, to, pos.to_move, PieceType.knight, captured_piece_type));
+            try moves.append(Move.initPromotionCapture(from, to, pos.to_move, PieceType.rook, captured_piece_type));
+            try moves.append(Move.initPromotionCapture(from, to, pos.to_move, PieceType.bishop, captured_piece_type));
         } else if (to == pos.en_passant_target) {
-            try moves.append(move.createEnPassantCaptureMove(from, to));
+            try moves.append(Move.initEnPassant(from, to, pos.to_move));
         } else {
-            try moves.append(move.createCaptureMove(from, to));
+            try moves.append(Move.initCapture(from, to, pos.to_move, PieceType.pawn, captured_piece_type));
         }
     }
 }
 
-fn generateKnightMoves(moves: *ArrayList(u32), pos: position.Position) !void {
+fn generateKnightMoves(moves: *ArrayList(?Move), pos: *position.Position) !void {
     const opponent_pieces = pos.board.getColor(color.invert(pos.to_move));
     const empty = pos.board.empty();
-    const knights = pos.board.get(PieceType.knight, pos.to_move);
+    var knights = pos.board.get(PieceType.knight, pos.to_move);
 
     // While there are knights left to process, find the index and generate moves
     // for that knight
-    while (knights) {
-        const from = bitScanAndReset(&knights);
+    while (knights != 0) {
+        const from = bitscanForwardAndReset(&knights);
         const targets = attack.KNIGHT_ATTACKS[from];
 
-        const quiet = targets & empty;
-        const captures = targets & opponent_pieces;
+        var quiet = targets & empty;
+        var captures = targets & opponent_pieces;
 
-        while (quiet) {
-            const to = bitScanAndReset(&quiet);
-            try moves.append(move.createQuietMove(from, to));
+        while (quiet != 0) {
+            const to = bitscanForwardAndReset(&quiet);
+            try moves.append(Move.initQuiet(from, to, pos.to_move, PieceType.knight));
         }
 
-        while (captures) {
-            const to = bitScanAndReset(&captures);
-            try moves.append(move.createCaptureMove(from, to));
+        while (captures != 0) {
+            const to = bitscanForwardAndReset(&captures);
+            const captured_piece_type = pos.board.getPieceTypeAt(to);
+            try moves.append(Move.initCapture(from, to, pos.to_move, PieceType.knight, captured_piece_type));
         }
     }
 }
 
-fn generateKingMoves(moves: *ArrayList(u32), pos: position.Position) !void {
+fn generateKingMoves(moves: *ArrayList(?Move), pos: *position.Position) !void {
     const opponent_pieces = pos.board.getColor(color.invert(pos.to_move));
     const empty = pos.board.empty();
     const from = pos.getIndexOfKing(pos.to_move);
@@ -199,100 +210,105 @@ fn generateKingMoves(moves: *ArrayList(u32), pos: position.Position) !void {
     var quiet = targets & empty;
     var captures = targets & opponent_pieces;
 
-    while (quiet) {
-        const to = bitScanAndReset(&quiet);
-        try moves.append(move.createQuietMove(from, to));
+    while (quiet != 0) {
+        const to = bitscanForwardAndReset(&quiet);
+        try moves.append(Move.initQuiet(from, to, pos.to_move, PieceType.king));
     }
 
-    while (captures) {
-        const to = bitScanAndReset(&captures);
-        try moves.append(move.createCaptureMove(from, to));
+    while (captures != 0) {
+        const to = bitscanForwardAndReset(&captures);
+        const captured_piece_type = pos.board.getPieceTypeAt(to);
+        try moves.append(Move.initCapture(from, to, pos.to_move, PieceType.king, captured_piece_type));
     }
 }
 
 // TODO: inefficient, can be improved?
-fn generateSlidingMoves(moves: *ArrayList(u32), pos: position.Position) !void {
+fn generateSlidingMoves(moves: *ArrayList(?Move), pos: *position.Position) !void {
     const empty = pos.board.empty();
     const opponent_pieces = pos.board.getColor(color.invert(pos.to_move));
 
-    var queens = pos.get(PieceType.queen, pos.to_move);
-    var rooks = pos.get(PieceType.queen, pos.to_move);
-    var bishops = pos.get(PieceType.queen, pos.to_move);
+    var queens = pos.board.get(PieceType.queen, pos.to_move);
+    var rooks = pos.board.get(PieceType.queen, pos.to_move);
+    var bishops = pos.board.get(PieceType.queen, pos.to_move);
 
-    while (queens) {
-        const from = bitScanAndReset(&queens);
-        var targets = 0;
-        targets |= attack.south_attacks(queens, empty);
-        targets |= attack.north_attacks(queens, empty);
-        targets |= attack.east_attacks(queens, empty);
-        targets |= attack.west_attacks(queens, empty);
-        targets |= attack.north_east_attacks(queens, empty);
-        targets |= attack.north_west_attacks(queens, empty);
-        targets |= attack.south_east_attacks(queens, empty);
-        targets |= attack.south_west_attacks(queens, empty);
+    while (queens != 0) {
+        const from = bitscanForwardAndReset(&queens);
+        var targets: u64 = 0;
+        targets |= attack.southAttacks(queens, empty);
+        targets |= attack.northAttacks(queens, empty);
+        targets |= attack.eastAttacks(queens, empty);
+        targets |= attack.westAttacks(queens, empty);
+        targets |= attack.northEastAttacks(queens, empty);
+        targets |= attack.northWestAttacks(queens, empty);
+        targets |= attack.southEastAttacks(queens, empty);
+        targets |= attack.southWestAttacks(queens, empty);
 
         var quiet = targets & empty;
         var captures = targets & opponent_pieces;
 
-        while (quiet) {
-            const to = bitScanAndReset(&quiet);
-            try moves.append(move.createQuietMove(from, to));
+        while (quiet != 0) {
+            const to = bitscanForwardAndReset(&quiet);
+            try moves.append(Move.initQuiet(from, to, pos.to_move, PieceType.queen));
         }
 
-        while (captures) {
-            const to = bitScanAndReset(&captures);
-            try moves.append(move.createCaptureMove(from, to));
+        while (captures != 0) {
+            const to = bitscanForwardAndReset(&captures);
+            const captured_piece_type = pos.board.getPieceTypeAt(to);
+            try moves.append(Move.initCapture(from, to, pos.to_move, PieceType.queen, captured_piece_type));
         }
     }
 
-    while (rooks) {
-        const from = bitScanAndReset(&rooks);
-        var targets = 0;
-        targets |= attack.south_attacks(rooks, empty);
-        targets |= attack.north_attacks(rooks, empty);
-        targets |= attack.east_attacks(rooks, empty);
-        targets |= attack.west_attacks(rooks, empty);
+    while (rooks != 0) {
+        const from = bitscanForwardAndReset(&rooks);
+        var targets: u64 = 0;
+        targets |= attack.southAttacks(rooks, empty);
+        targets |= attack.northAttacks(rooks, empty);
+        targets |= attack.eastAttacks(rooks, empty);
+        targets |= attack.westAttacks(rooks, empty);
 
         var quiet = targets & empty;
         var captures = targets & opponent_pieces;
 
-        while (quiet) {
-            const to = bitScanAndReset(&quiet);
-            try moves.append(move.createQuietMove(from, to));
+        while (quiet != 0) {
+            const to = bitscanForwardAndReset(&quiet);
+            try moves.append(Move.initQuiet(from, to, pos.to_move, PieceType.rook));
         }
 
-        while (captures) {
-            const to = bitScanAndReset(&captures);
-            try moves.append(move.createCaptureMove(from, to));
+        while (captures != 0) {
+            const to = bitscanForwardAndReset(&captures);
+            const captured_piece_type = pos.board.getPieceTypeAt(to);
+            try moves.append(Move.initCapture(from, to, pos.to_move, PieceType.rook, captured_piece_type));
         }
     }
 
-    while (bishops) {
-        const from = bitScanAndReset(&bishops);
-        var targets = 0;
-        targets |= attack.north_east_attacks(bishops, empty);
-        targets |= attack.north_west_attacks(bishops, empty);
-        targets |= attack.south_east_attacks(bishops, empty);
-        targets |= attack.south_west_attacks(bishops, empty);
+    while (bishops != 0) {
+        const from = bitscanForwardAndReset(&bishops);
+        var targets: u64 = 0;
+        targets |= attack.northEastAttacks(bishops, empty);
+        targets |= attack.northWestAttacks(bishops, empty);
+        targets |= attack.southEastAttacks(bishops, empty);
+        targets |= attack.southWestAttacks(bishops, empty);
 
         var quiet = targets & empty;
         var captures = targets & opponent_pieces;
 
-        while (quiet) {
-            const to = bitScanAndReset(&quiet);
-            try moves.append(move.createQuietMove(from, to));
+        while (quiet != 0) {
+            const to = bitscanForwardAndReset(&quiet);
+            try moves.append(Move.initQuiet(from, to, pos.to_move, PieceType.bishop));
         }
 
-        while (captures) {
-            const to = bitScanAndReset(&captures);
-            try moves.append(move.createCaptureMove(from, to));
+        while (captures != 0) {
+            const to = bitscanForwardAndReset(&captures);
+            const captured_piece_type = pos.board.getPieceTypeAt(to);
+            try moves.append(Move.initCapture(from, to, pos.to_move, PieceType.bishop, captured_piece_type));
         }
     }
 }
 
-fn generateCastlingMoves(moves: *ArrayList(u32), pos: position.Position) !void {
+fn generateCastlingMoves(moves: *ArrayList(?Move), pos: *position.Position) !void {
     // Return early if no castling is possible; this saves the attack generation cost
-    if (!pos.hasCastleRight(false) and !pos.hasCastleRight(true)) {
+    if (!castling.hasCastlingRight(pos.castling, pos.to_move, castling.CastleSide.king)
+        and !castling.hasCastlingRight(pos.castling, pos.to_move, castling.CastleSide.queen)) {
         return;
     }
 
@@ -301,17 +317,17 @@ fn generateCastlingMoves(moves: *ArrayList(u32), pos: position.Position) !void {
     const attack_map = pos.generateAttackMap(color.invert(pos.to_move));
 
     // TODO: can do a faster check here? That doesn't involve creating an attack map if not necessary
-    if (isKingInCheck(pos, pos.to_move, attack_map)) {
+    if (isKingInCheck(pos.*, pos.to_move, attack_map)) {
         return;
     }
 
     // Kingside castle
-    if (pos.hasCastleRight(false) and clearToCastle(pos, move.KING_CASTLE, attack_map)) {
-        try moves.append(move.KING_CASTLE);
+    if (castling.hasCastlingRight(pos.castling, pos.to_move, castling.CastleSide.king) and clearToCastle(pos, castling.CastleSide.king, attack_map)) {
+        try moves.append(Move.initKingsideCastle(pos.to_move));
     }
 
-    if (pos.hasCastleRight(true) and clearToCastle(pos, move.QUEEN_CASTLE, attack_map)) {
-        try moves.append(move.QUEEN_CASTLE);
+    if (castling.hasCastlingRight(pos.castling, pos.to_move, castling.CastleSide.queen) and clearToCastle(pos, castling.CastleSide.queen, attack_map)) {
+        try moves.append(Move.initQueensideCastle(pos.to_move));
     }
 }
 
@@ -337,11 +353,10 @@ const CASTLING_CHECKS = [4][2]u8{
 // determine if the side is able to legally castle.
 // TODO: this can be sped up by precomputing bitboards for the blocked and checked squares, then doing an intersection
 // with the occupied and attack maps respectively
-fn clearToCastle(pos: position.Position, side: u32, attack_map: u64) bool {
+fn clearToCastle(pos: *position.Position, side: castling.CastleSide, attack_map: u64) bool {
     const castling_index: u8 = switch (side) {
-            move.KING_CASTLE => 0,
-            move.QUEEN_CASTLE => 1,
-            else => @intCast(u8, 0),
+            .king => @as(u8, 0),
+            .queen => @as(u8, 1),
         } + if (pos.to_move == Color.black) @intCast(u8, 2) else @intCast(u8, 0);
 
     // For each index in the potential blockers, check that there is no piece

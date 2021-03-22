@@ -1,7 +1,7 @@
 const position = @import("./position.zig");
 const movegen = @import("./movegen.zig");
 const make_move = @import("./make_move.zig");
-const move = @import("./move.zig");
+const Move = @import("./move.zig").Move;
 const evaluate = @import("./evaluate.zig");
 const debug = @import("./debug.zig");
 const std = @import("std");
@@ -16,7 +16,7 @@ const Logger = @import("./logger.zig").Logger;
 // depth, returning each best move until it is signalled to stop.
 pub const InfiniteSearchContext = struct {
     pos: *position.Position,
-    best_move: *u32,
+    best_move: *?Move,
     thread_ctx: SearchContext,
 };
 
@@ -49,50 +49,49 @@ pub fn searchInfinite(context: InfiniteSearchContext) !void {
             break;
         }
 
-        context.best_move.* = result;
+        if (result) |best_move| {
+            context.best_move.* = best_move;
+        }
 
         depth += 1;
     }
 }
 
 // Search for the best move for a position, to a given depth.
-pub fn search(pos: *position.Position, depth: u64, alpha: i64, beta: i64, ctx: SearchContext) u32 {
+pub fn search(pos: *position.Position, depth: u64, alpha: i64, beta: i64, ctx: SearchContext) ?Move {
     // Log the starting position of the search
-    var debug_buf = std.ArrayList(u8).init(ctx.a);
-    defer debug_buf.deinit();
-    debug.toFEN(pos.*, &debug_buf) catch unreachable;
-    ctx.logger.log("SEARCH", "\tposition = {s}, depth = {}, alpha = {}, beta = {}", .{debug_buf.items, depth, alpha, beta}) catch unreachable;
+//    var debug_buf = std.ArrayList(u8).init(ctx.a);
+//    defer debug_buf.deinit();
+//    debug.toFEN(pos.*, &debug_buf) catch unreachable;
+//    ctx.logger.log("SEARCH", "\tposition = {s}, depth = {}, alpha = {}, beta = {}", .{debug_buf.items, depth, alpha, beta}) catch unreachable;
 
     // Generate all legal moves for the current position.
-    var moves = ArrayList(u32).init(ctx.a);
+    var moves = ArrayList(?Move).init(ctx.a);
     defer moves.deinit();
     movegen.generateLegalMoves(&moves, pos);
     ctx.logger.log("SEARCH", "\tgenerated starting moves: n = {}", .{moves.items.len}) catch unreachable;
 
     var best_score: i64 = -100000;
-    var best_move: u32 = move.NULL_MOVE;
+    var best_move: ?Move = null;
 
     // For each move available, run a search of its tree to the given depth, to
     // identify the best outcome.
-    for (moves.items) |m| {
+    for (moves.items) |opt_m| {
         if (ctx.cancelled.*) {
             break;
         }
 
-        if (m == move.NULL_MOVE) {
-            // Not a legal move
-            continue;
+        if (opt_m) |m| {
+            const artifacts = make_move.makeMove(pos, m);
+            const negamax_score: i64 = -alphaBeta(pos, alpha, beta, depth, ctx);
+
+            if (negamax_score >= best_score) {
+                best_score = negamax_score;
+                best_move = m;
+            }
+
+            make_move.unmakeMove(pos, m, artifacts);
         }
-
-        const artifacts = make_move.makeMove(pos, m);
-        const negamax_score: i64 = -alphaBeta(pos, alpha, beta, depth, ctx);
-
-        if (negamax_score >= best_score) {
-            best_score = negamax_score;
-            best_move = m;
-        }
-
-        make_move.unmakeMove(pos, m, artifacts);
     }
 
     return best_move;
@@ -109,43 +108,40 @@ pub fn search(pos: *position.Position, depth: u64, alpha: i64, beta: i64, ctx: S
 fn alphaBeta(pos: *position.Position, alpha: i64, beta: i64, depth: u64, ctx: SearchContext) i64 {
     // At the bottom of the tree, return the score of the position for the attacking player.
     if (depth == 0) {
-        return evaluate.evaluate(pos.*);
+        return evaluate.evaluate(pos);
     }
 
     var new_alpha: i64 = alpha;
 
     // Otherwise, generate all possible moves.
-    var moves = ArrayList(u32).init(ctx.a);
+    var moves = ArrayList(?Move).init(ctx.a);
     defer moves.deinit();
     movegen.generateLegalMoves(&moves, pos);
     // ctx.stderr.writer().print("??? [ALPHAB] \tgenerated moves: n = {}, depth = {}, alpha = {}, beta = {}\n", .{moves.items.len, depth, alpha, beta}) catch unreachable;
 
-    for (moves.items) |m| {
-        if (m == move.NULL_MOVE) {
-            // Not a legal move
-            continue;
-        }
+    for (moves.items) |opt_m| {
+        if (opt_m) |m| {
+            // Make the move.
+            const artifacts = make_move.makeMove(pos, m);
 
-        // Make the move.
-        const artifacts = make_move.makeMove(pos, m);
+            // Recursively call the search function to determine the move's score.
+            const score: i64 = -alphaBeta(pos, -beta, -new_alpha, depth - 1, ctx);
 
-        // Recursively call the search function to determine the move's score.
-        const score: i64 = -alphaBeta(pos, -beta, -new_alpha, depth - 1, ctx);
+            // If the score is higher than the beta cutoff, the rest of the search
+            // tree is irrelevant and the cutoff is returned.
+            if (score >= beta) {
+                make_move.unmakeMove(pos, m, artifacts);
+                return beta;
+            }
 
-        // If the score is higher than the beta cutoff, the rest of the search
-        // tree is irrelevant and the cutoff is returned.
-        if (score >= beta) {
+            // Otherwise, replace the alpha if the new score is higher.
+            if (score > new_alpha) {
+                new_alpha = score;
+            }
+
+            // Restore the pre-move state of the board.
             make_move.unmakeMove(pos, m, artifacts);
-            return beta;
         }
-
-        // Otherwise, replace the alpha if the new score is higher.
-        if (score > new_alpha) {
-            new_alpha = score;
-        }
-
-        // Restore the pre-move state of the board.
-        make_move.unmakeMove(pos, m, artifacts);
     }
 
     return new_alpha;

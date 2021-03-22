@@ -68,10 +68,10 @@ pub const Move = struct {
         return move;
     }
 
-    pub fn initCapture(from: u8, to: u8, piece_color: Color, piece_type: PieceType, captured_piece_color: Color, captured_piece_type: PieceType) Move {
+    pub fn initCapture(from: u8, to: u8, piece_color: Color, piece_type: PieceType, captured_piece_type: PieceType) Move {
         var move = Move.initQuiet(from, to, piece_color, piece_type);
         move.move_type = MoveType.capture;
-        move.captured_piece_color = captured_piece_color;
+        move.captured_piece_color = color.invert(piece_color);
         move.captured_piece_type = captured_piece_type;
         return move;
     }

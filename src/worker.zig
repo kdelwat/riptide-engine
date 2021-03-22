@@ -4,6 +4,7 @@ const search = @import("./search.zig");
 const File = std.fs.File;
 const Allocator = std.mem.Allocator;
 const Logger = @import("./logger.zig").Logger;
+const Move = @import("./move.zig").Move;
 
 // Search must run off the main thread, otherwise it will block UCI commands like
 // `stop`.
@@ -25,7 +26,7 @@ const WorkerError = error {
 };
 
 // Spawn the worker thread, or return an error if it has already been started
-pub fn start(pos: *position.Position, best_move: *u32, logger: Logger, a: *Allocator) !void {
+pub fn start(pos: *position.Position, best_move: *?Move, logger: Logger, a: *Allocator) !void {
     if (status != WorkerThreadStatus.not_running) {
         return WorkerError.WorkerAlreadyRunning;
     }

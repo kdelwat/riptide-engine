@@ -26,6 +26,21 @@ pub const Bitboard = struct {
         return self.boards[@enumToInt(piece_type)] & self.boards[@enumToInt(color)];
     }
 
+    pub fn getColor(self: *Bitboard, color: Color) u64 {
+        return self.boards[@enumToInt(color)];
+    }
+
+    pub fn getPieceTypeAt(self: *Bitboard, index: u8) PieceType {
+        const mask = bitboardFromIndex(index);
+        if (self.boards[2] & mask != 0) return PieceType.pawn;
+        if (self.boards[3] & mask != 0) return PieceType.knight;
+        if (self.boards[4] & mask != 0) return PieceType.bishop;
+        if (self.boards[5] & mask != 0) return PieceType.rook;
+        if (self.boards[6] & mask != 0) return PieceType.queen;
+        if (self.boards[7] & mask != 0) return PieceType.king;
+        return PieceType.empty;
+    }
+
     // Ensure a bit is set to 1 for the given position
     pub fn setFR(self: *Bitboard, piece_type: PieceType, color: Color, file_index: u8, rank_index: u8) void {
         const mask = bitboardFromIndex(bitboardIndex(file_index, rank_index));
@@ -97,8 +112,3 @@ fn fileIndex(bitboard_index: u8) u8 {
 fn rankIndex(bitboard_index: u8) u8 {
     return bitboard_index >> 3;
 }
-
-pub fn isOnRank(bitboard_index: u8, rank_index: u8) bool {
-    return bitboard_index >= (rank_index * 8) and bitboard_index <= (rank_index * 8 + 7);
-}
-

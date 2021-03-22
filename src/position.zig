@@ -7,6 +7,8 @@ const Fen = @import("./parse/fen.zig").Fen;
 const Bitboard = @import("./bitboard.zig").Bitboard;
 const bitboardIndex = @import("./bitboard.zig").bitboardIndex;
 const CanCastle = @import("./castling.zig").CanCastle;
+const attack = @import("./attack.zig");
+usingnamespace @import("./bitboard_ops.zig");
 
 // Position contains the complete game state after a turn.
 pub const Position = struct {
@@ -68,7 +70,7 @@ pub const Position = struct {
         return self.king_indices[@enumToInt(side)];
     }
 
-    pub fn generateKingAttackMap(self: Position, attacker: Color) u64 {
+    pub fn generateKingAttackMap(self: *Position, attacker: Color) u64 {
         // Remove the attacked king before generating an attack bitboard
         // This will prevent moves where the king tries to run from sliding pieces
         // but would still be attacked
@@ -78,13 +80,13 @@ pub const Position = struct {
         return attack_map;
     }
 
-    pub fn generateAttackMap(self: Position, attacker: Color) u64 {
+    pub fn generateAttackMap(self: *Position, attacker: Color) u64 {
         // TODO: cache repeated calls to this function for a position
-        return attack.generateAtackMap(self, attacker);
+        return attack.generateAttackMap(self, attacker);
     }
     // Checks if there is a piece at the given index
     pub fn pieceOn(self: Position, i: u8) bool {
-        return self.board.occupied() & (1 << i) != 0;
+        return self.board.occupied() & bitboardFromIndex(i) != 0;
     }
 };
 

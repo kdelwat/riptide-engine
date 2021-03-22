@@ -8,7 +8,7 @@ const UciCommandType = @import("./uci.zig").UciCommandType;
 const GoOption = @import("./uci.zig").GoOption;
 const GoOptionType = @import("./uci.zig").GoOptionType;
 const fen = @import("./parse/fen.zig");
-const move = @import("./move.zig");
+const Move = @import("./move.zig").Move;
 const search = @import("./search.zig");
 const worker = @import("./worker.zig");
 const Allocator = std.mem.Allocator;
@@ -22,7 +22,7 @@ const start_position = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
 // continue to receive commands.
 const GlobalData = struct {
     pos: position.Position,
-    best_move: u32,
+    best_move: ?Move,
 };
 
 var engine_data: GlobalData = undefined;
@@ -150,7 +150,7 @@ fn handleCommand(input: []const u8, logger: Logger, a: *Allocator) !bool {
         UciCommandType.position => |pos| {
             engine_data = GlobalData{
                .pos = position.fromFENStruct(pos.fen),
-               .best_move = 0,
+               .best_move = null,
             };
         },
 
@@ -174,7 +174,7 @@ fn handleCommand(input: []const u8, logger: Logger, a: *Allocator) !bool {
 fn startNewGame(pos: []const u8) void {
     engine_data = GlobalData{
        .pos = position.fromFEN(start_position) catch unreachable,
-       .best_move = 0,
+       .best_move = null,
     };
 }
 
@@ -274,9 +274,13 @@ fn stopAnalysis(logger: Logger) !void {
     // Send the best move found so far
     try sendBestMove(engine_data.best_move, logger);
 
-    engine_data.best_move = move.NULL_MOVE;
+    engine_data.best_move = null;
 }
 
-fn sendBestMove(m: u32, logger: Logger) !void {
-    try logger.outgoing("bestmove {}", .{try move.toLongAlgebraic(m)});
+fn sendBestMove(opt_m: ?Move, logger: Logger) !void {
+    if (opt_m) |m| {
+        try logger.outgoing("bestmove {}", .{try m.toLongAlgebraic()});
+    } else {
+        try logger.log("MAIN", "null move returned from search", .{});
+    }
 }

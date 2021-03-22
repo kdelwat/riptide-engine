@@ -85,3 +85,8 @@ pub fn bitscanForwardAndReset(b: *u64) u8 {
 pub inline fn bitboardFromIndex(index: u8) u64 {
     return @truncate(u64, @as(u256,1) << index);
 }
+
+// Determine whether a bitboard index is on a certain rank
+pub fn isOnRank(bitboard_index: u8, rank_index: u8) bool {
+    return bitboard_index >= (rank_index * 8) and bitboard_index <= (rank_index * 8 + 7);
+}
