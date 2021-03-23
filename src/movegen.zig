@@ -55,11 +55,11 @@ pub fn countNonNullMoves(moves: *ArrayList(?Move)) u32 {
 
 // Generate pseudo-legal moves for a position
 pub fn generateMoves(moves: *ArrayList(?Move), pos: *position.Position) void {
-//    generatePawnMoves(moves, pos) catch unreachable;
-//    generatePawnCaptures(moves, pos) catch unreachable;
+    generatePawnMoves(moves, pos) catch unreachable;
+    generatePawnCaptures(moves, pos) catch unreachable;
     generateKnightMoves(moves, pos) catch unreachable;
     generateKingMoves(moves, pos) catch unreachable;
-//    generateCastlingMoves(moves, pos) catch unreachable;
+    generateCastlingMoves(moves, pos) catch unreachable;
     generateSlidingMoves(moves, pos) catch unreachable;
 }
 
@@ -93,7 +93,10 @@ fn generatePawnMoves(moves: *ArrayList(?Move), pos: *position.Position) !void {
     // promotion moves. Otherwise generate a quiet push.
     while (single_push != 0) {
         const to = bitscanForwardAndReset(&single_push);
-        const from = to - 8;
+        const from = switch(pos.to_move) {
+            Color.white => to - 8,
+            Color.black => to + 8,
+        };
 
         if (isOnRank(to, promotion_rank)) {
             try moves.append(Move.initPromotion(from, to, pos.to_move, PieceType.queen));
@@ -108,7 +111,10 @@ fn generatePawnMoves(moves: *ArrayList(?Move), pos: *position.Position) !void {
     // Generate double push moves.
     while (double_push != 0) {
         const to = bitscanForwardAndReset(&double_push);
-        const from = to - 16;
+        const from = switch(pos.to_move) {
+            Color.white => to - 16,
+            Color.black => to + 16,
+        };
         try moves.append(Move.initDoublePawnPush(from, to, pos.to_move));
     }
 }
@@ -141,7 +147,12 @@ fn generatePawnCaptures(moves: *ArrayList(?Move), pos: *position.Position) !void
     // promotion capture moves. Otherwise generate a capture move.
     while (east_captures != 0) {
         const to = bitscanForwardAndReset(&east_captures);
-        const from = to - 7; // TODO: might be wrong way around
+
+        // TODO: might be wrong way around
+        const from = switch(pos.to_move) {
+            Color.white => to - 7,
+            Color.black => to + 7,
+        };
 
         const captured_piece_type = pos.board.getPieceTypeAt(to);
 
@@ -159,7 +170,11 @@ fn generatePawnCaptures(moves: *ArrayList(?Move), pos: *position.Position) !void
 
     while (west_captures != 0) {
         const to = bitscanForwardAndReset(&west_captures);
-        const from = to - 9; // TODO: might be wrong way around
+        // TODO: might be wrong way around
+        const from = switch(pos.to_move) {
+            Color.white => to - 9,
+            Color.black => to + 9,
+        };
 
         const captured_piece_type = pos.board.getPieceTypeAt(to);
 
