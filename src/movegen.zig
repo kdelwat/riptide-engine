@@ -55,11 +55,11 @@ pub fn countNonNullMoves(moves: *ArrayList(?Move)) u32 {
 
 // Generate pseudo-legal moves for a position
 pub fn generateMoves(moves: *ArrayList(?Move), pos: *position.Position) void {
-    generatePawnMoves(moves, pos) catch unreachable;
-    generatePawnCaptures(moves, pos) catch unreachable;
+//    generatePawnMoves(moves, pos) catch unreachable;
+//    generatePawnCaptures(moves, pos) catch unreachable;
     generateKnightMoves(moves, pos) catch unreachable;
     generateKingMoves(moves, pos) catch unreachable;
-    generateCastlingMoves(moves, pos) catch unreachable;
+//    generateCastlingMoves(moves, pos) catch unreachable;
     generateSlidingMoves(moves, pos) catch unreachable;
 }
 
@@ -230,20 +230,22 @@ fn generateSlidingMoves(moves: *ArrayList(?Move), pos: *position.Position) !void
     const opponent_pieces = pos.board.getColor(color.invert(pos.to_move));
 
     var queens = pos.board.get(PieceType.queen, pos.to_move);
-    var rooks = pos.board.get(PieceType.queen, pos.to_move);
-    var bishops = pos.board.get(PieceType.queen, pos.to_move);
+    var rooks = pos.board.get(PieceType.rook, pos.to_move);
+    var bishops = pos.board.get(PieceType.bishop, pos.to_move);
 
     while (queens != 0) {
         const from = bitscanForwardAndReset(&queens);
         var targets: u64 = 0;
-        targets |= attack.southAttacks(queens, empty);
-        targets |= attack.northAttacks(queens, empty);
-        targets |= attack.eastAttacks(queens, empty);
-        targets |= attack.westAttacks(queens, empty);
-        targets |= attack.northEastAttacks(queens, empty);
-        targets |= attack.northWestAttacks(queens, empty);
-        targets |= attack.southEastAttacks(queens, empty);
-        targets |= attack.southWestAttacks(queens, empty);
+        const bitboard = bitboardFromIndex(from);
+
+        targets |= attack.southAttacks(bitboard, empty);
+        targets |= attack.northAttacks(bitboard, empty);
+        targets |= attack.eastAttacks(bitboard, empty);
+        targets |= attack.westAttacks(bitboard, empty);
+        targets |= attack.northEastAttacks(bitboard, empty);
+        targets |= attack.northWestAttacks(bitboard, empty);
+        targets |= attack.southEastAttacks(bitboard, empty);
+        targets |= attack.southWestAttacks(bitboard, empty);
 
         var quiet = targets & empty;
         var captures = targets & opponent_pieces;
@@ -263,10 +265,11 @@ fn generateSlidingMoves(moves: *ArrayList(?Move), pos: *position.Position) !void
     while (rooks != 0) {
         const from = bitscanForwardAndReset(&rooks);
         var targets: u64 = 0;
-        targets |= attack.southAttacks(rooks, empty);
-        targets |= attack.northAttacks(rooks, empty);
-        targets |= attack.eastAttacks(rooks, empty);
-        targets |= attack.westAttacks(rooks, empty);
+        const bitboard = bitboardFromIndex(from);
+        targets |= attack.southAttacks(bitboard, empty);
+        targets |= attack.northAttacks(bitboard, empty);
+        targets |= attack.eastAttacks(bitboard, empty);
+        targets |= attack.westAttacks(bitboard, empty);
 
         var quiet = targets & empty;
         var captures = targets & opponent_pieces;
@@ -286,10 +289,12 @@ fn generateSlidingMoves(moves: *ArrayList(?Move), pos: *position.Position) !void
     while (bishops != 0) {
         const from = bitscanForwardAndReset(&bishops);
         var targets: u64 = 0;
-        targets |= attack.northEastAttacks(bishops, empty);
-        targets |= attack.northWestAttacks(bishops, empty);
-        targets |= attack.southEastAttacks(bishops, empty);
-        targets |= attack.southWestAttacks(bishops, empty);
+        const bitboard = bitboardFromIndex(from);
+
+        targets |= attack.northEastAttacks(bitboard, empty);
+        targets |= attack.northWestAttacks(bitboard, empty);
+        targets |= attack.southEastAttacks(bitboard, empty);
+        targets |= attack.southWestAttacks(bitboard, empty);
 
         var quiet = targets & empty;
         var captures = targets & opponent_pieces;
