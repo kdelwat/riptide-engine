@@ -1,13 +1,14 @@
 const std = @import("std");
 const expect = std.testing.expect;
 const mem = std.mem;
+const test_allocator = std.testing.allocator;
 
 const position = @import("./position.zig");
 const Bitboard = @import("./bitboard.zig").Bitboard;
 const Color = @import("./color.zig").Color;
 
 fn fromFEN(f: []const u8) position.Position {
-    return position.fromFEN(f) catch unreachable;
+    return position.fromFEN(f, test_allocator) catch unreachable;
 }
 
 test "fromFEN - empty board" {

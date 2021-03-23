@@ -8,6 +8,7 @@ const Bitboard = @import("./bitboard.zig").Bitboard;
 const bitboardIndex = @import("./bitboard.zig").bitboardIndex;
 const CanCastle = @import("./castling.zig").CanCastle;
 const attack = @import("./attack.zig");
+const Allocator = std.mem.Allocator;
 usingnamespace @import("./bitboard_ops.zig");
 
 // Position contains the complete game state after a turn.
@@ -90,16 +91,17 @@ pub const Position = struct {
     }
 };
 
-pub fn fromFEN(fen: []const u8) !Position {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer { _ = gpa.deinit(); }
-    const f: Fen = (try parse_fen(&gpa.allocator, fen)).value;
+// Create a new Position from a FEN string
+// The allocator is used by mecha internally for the parsing
+pub fn fromFEN(fen: []const u8, a: *Allocator) !Position {
+    const f: Fen = (try parse_fen(a, fen)).value;
     return fromFENStruct(f);
 }
 
 pub fn fromFENStruct(fen: Fen) Position {
     // First, set up the board position.
     var board = Bitboard.init();
+
     var rank_index: u8 = 7;
     var file_index: u8 = 0;
     var king_indices = [2]u8{0,0};

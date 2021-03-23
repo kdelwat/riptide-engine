@@ -4,10 +4,11 @@ const evaluate = @import("evaluate.zig").evaluate;
 const std = @import("std");
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
+const test_allocator = std.testing.allocator;
 
 test "Pawn testing" {
     const expected: i64 = 330;
-    var pos = position.fromFEN("8/8/8/8/4P3/3P4/2P5/8 w KQkq - 0 11") catch unreachable;
+    var pos = position.fromFEN("8/8/8/8/4P3/3P4/2P5/8 w KQkq - 0 11", test_allocator) catch unreachable;
     expect(evaluate(&pos) == expected);
     pos.to_move = switch (pos.to_move) {
         Color.white => Color.black,
@@ -18,7 +19,7 @@ test "Pawn testing" {
 
 test "Knight, rook, bishop"  {
     const expected: i64 = -685;
-    var pos = position.fromFEN("8/5n2/r2r4/8/8/6B1/3B4/8 w KQkq - 0 1") catch unreachable;
+    var pos = position.fromFEN("8/5n2/r2r4/8/8/6B1/3B4/8 w KQkq - 0 1", test_allocator) catch unreachable;
     expect(evaluate(&pos) == expected);
     pos.to_move = switch (pos.to_move) {
         Color.white => Color.black,
@@ -29,7 +30,7 @@ test "Knight, rook, bishop"  {
 
 test "Asymmetrical kings" {
     const expected: i64 = 60;
-    var pos = position.fromFEN("8/8/8/8/8/8/8/K4k2 w - - 0 1") catch unreachable;
+    var pos = position.fromFEN("8/8/8/8/8/8/8/K4k2 w - - 0 1", test_allocator) catch unreachable;
 
     expectEqual(expected, evaluate(&pos));
 
@@ -42,7 +43,7 @@ test "Asymmetrical kings" {
 
 test "Starting position" {
     const expected: i64 = 0;
-    var pos = position.fromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") catch unreachable;
+    var pos = position.fromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", test_allocator) catch unreachable;
 
     expectEqual(expected, evaluate(&pos));
 
