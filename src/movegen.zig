@@ -44,8 +44,10 @@ pub fn generateLegalMoves(moves: *ArrayList(?Move), pos: *position.Position) voi
 pub fn countNonNullMoves(moves: *ArrayList(?Move)) u32 {
     var count: u32 = 0;
 
-    for (moves.items) |m| {
-        if (m != move.NULL_MOVE) count += 1;
+    for (moves.items) |opt_m| {
+        if (opt_m) |m| {
+            count += 1;
+        }
     }
 
     return count;
