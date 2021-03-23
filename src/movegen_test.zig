@@ -17,21 +17,21 @@ fn fromFEN(f: []const u8) position.Position {
     return position.fromFEN(f, test_allocator) catch unreachable;
 }
 
-//test "generateMoves - Starting position" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 20), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
-//
-//test "generateMoves - King movement" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("8/5k2/8/8/3K4/8/8/8 w - - 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 8), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
+test "generateMoves - Starting position" {
+    var moves = ArrayList(?Move).init(test_allocator);
+    var pos = fromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    generateMoves(&moves, &pos);
+    expectEqual(@as(u32, 20), countNonNullMoves(&moves));
+    moves.deinit();
+}
+
+test "generateMoves - King movement" {
+    var moves = ArrayList(?Move).init(test_allocator);
+    var pos = fromFEN("8/5k2/8/8/3K4/8/8/8 w - - 0 1");
+    generateMoves(&moves, &pos);
+    expectEqual(@as(u32, 8), countNonNullMoves(&moves));
+    moves.deinit();
+}
 
 test "generateMoves - Rook sliding normal" {
     var moves = ArrayList(?Move).init(test_allocator);
@@ -83,89 +83,89 @@ test "generateMoves - Knight on edge" {
 
 test "generateMoves - Pawn at start" {
     var moves = ArrayList(?Move).init(test_allocator);
-    var pos = fromFEN("8/7k/8/8/8/8/3P4/8 w KQkq - 0 1");
+    var pos = fromFEN("8/7k/8/8/8/8/3P4/K7 w - - 0 1");
     generateMoves(&moves, &pos);
-    expectEqual(@as(u32, 2), countNonNullMoves(&moves));
+    expectEqual(@as(u32, 5), countNonNullMoves(&moves));
     moves.deinit();
 }
 
 test "generateMoves - Pawn after moving" {
     var moves = ArrayList(?Move).init(test_allocator);
-    var pos = fromFEN("8/7k/8/8/8/3P4/8/8 w KQkq - 0 1");
+    var pos = fromFEN("8/7k/8/8/8/3P4/8/K7 w - - 0 1");
     generateMoves(&moves, &pos);
-    expectEqual(@as(u32, 1), countNonNullMoves(&moves));
+    expectEqual(@as(u32, 4), countNonNullMoves(&moves));
     moves.deinit();
 }
 
 test "generateMoves - Pawn captures" {
     var moves = ArrayList(?Move).init(test_allocator);
-    var pos = fromFEN("7k/8/8/8/8/2p1p3/3P4/8 w KQkq - 0 1");
+    var pos = fromFEN("7k/8/8/8/8/2p1p3/3P4/K7 w - - 0 1");
     generateMoves(&moves, &pos);
-    expectEqual(@as(u32, 4), countNonNullMoves(&moves));
+    expectEqual(@as(u32, 7), countNonNullMoves(&moves));
     moves.deinit();
 }
 
 test "generateMoves - En passant capture" {
     var moves = ArrayList(?Move).init(test_allocator);
-    var pos = fromFEN("8/7k/8/3Pp3/8/8/8/8 w KQkq e6 0 1");
+    var pos = fromFEN("8/7k/8/3Pp3/8/8/8/K7 w - e6 0 1");
     generateMoves(&moves, &pos);
-    expectEqual(@as(u32, 2), countNonNullMoves(&moves));
+    expectEqual(@as(u32, 5), countNonNullMoves(&moves));
     moves.deinit();
 }
 
 test "generateMoves - Two en passant options" {
     var moves = ArrayList(?Move).init(test_allocator);
-    var pos = fromFEN("8/7k/8/3PpP2/8/8/8/8 w KQkq e6 0 1");
+    var pos = fromFEN("8/7k/8/3PpP2/8/8/8/K7 w - e6 0 1");
     generateMoves(&moves, &pos);
-    expectEqual(@as(u32, 4), countNonNullMoves(&moves));
+    expectEqual(@as(u32, 7), countNonNullMoves(&moves));
     moves.deinit();
 }
 
 test "generateMoves - Black pawn at start" {
     var moves = ArrayList(?Move).init(test_allocator);
-    var pos = fromFEN("8/4p3/8/8/8/8/8/4K3 b - - 0 1");
+    var pos = fromFEN("k7/4p3/8/8/8/8/8/4K3 b - - 0 1");
     generateMoves(&moves, &pos);
-    expectEqual(@as(u32, 2), countNonNullMoves(&moves));
+    expectEqual(@as(u32, 5), countNonNullMoves(&moves));
     moves.deinit();
 }
 
 test "generateMoves - Black pawn captures" {
     var moves = ArrayList(?Move).init(test_allocator);
-    var pos = fromFEN("8/4p3/3P1P2/8/8/8/8/4K3 b - - 0 1");
+    var pos = fromFEN("k7/4p3/3P1P2/8/8/8/8/4K3 b - - 0 1");
     generateMoves(&moves, &pos);
-    expectEqual(@as(u32, 4), countNonNullMoves(&moves));
+    expectEqual(@as(u32, 7), countNonNullMoves(&moves));
     moves.deinit();
 }
 
 test "generateMoves - Black two en passant options" {
     var moves = ArrayList(?Move).init(test_allocator);
-    var pos = fromFEN("8/8/8/8/4pPp1/8/8/4K3 b - f3 0 1");
+    var pos = fromFEN("k7/8/8/8/4pPp1/8/8/4K3 b - f3 0 1");
     generateMoves(&moves, &pos);
-    expectEqual(@as(u32, 4), countNonNullMoves(&moves));
+    expectEqual(@as(u32, 7), countNonNullMoves(&moves));
     moves.deinit();
 }
 
 test "generateMoves - Promotion" {
     var moves = ArrayList(?Move).init(test_allocator);
-    var pos = fromFEN("8/2P4k/8/8/8/8/8/8 w KQkq - 0 1");
+    var pos = fromFEN("8/2P4k/8/8/8/8/8/K7 w - - 0 1");
     generateMoves(&moves, &pos);
-    expectEqual(@as(u32, 4), countNonNullMoves(&moves));
+    expectEqual(@as(u32, 7), countNonNullMoves(&moves));
     moves.deinit();
 }
 
 test "generateMoves - Capture promotion" {
     var moves = ArrayList(?Move).init(test_allocator);
-    var pos = fromFEN("2q4k/3P4/8/8/8/8/8/8 w KQkq - 0 1");
+    var pos = fromFEN("2q4k/3P4/8/8/8/8/8/K7 w - - 0 1");
     generateMoves(&moves, &pos);
-    expectEqual(@as(u32, 8), countNonNullMoves(&moves));
+    expectEqual(@as(u32, 11), countNonNullMoves(&moves));
     moves.deinit();
 }
 
 test "generateMoves - Black promotion" {
     var moves = ArrayList(?Move).init(test_allocator);
-    var pos = fromFEN("8/8/8/8/8/8/2p5/4K3 b - - 0 1");
+    var pos = fromFEN("k7/8/8/8/8/8/2p5/4K3 b - - 0 1");
     generateMoves(&moves, &pos);
-    expectEqual(@as(u32, 4), countNonNullMoves(&moves));
+    expectEqual(@as(u32, 7), countNonNullMoves(&moves));
     moves.deinit();
 }
 
@@ -211,7 +211,7 @@ test "generateMoves - Black king" {
 
 test "generateMoves - Can't castle through check" {
     var moves = ArrayList(?Move).init(test_allocator);
-    var pos = fromFEN("6q1/8/8/8/8/8/8/4K2R w Kkq - 0 1");
+    var pos = fromFEN("k5q1/8/8/8/8/8/8/4K2R w K - 0 1");
     generateMoves(&moves, &pos);
     expectEqual(@as(u32, 14), countNonNullMoves(&moves));
     moves.deinit();
