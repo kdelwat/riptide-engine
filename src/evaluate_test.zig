@@ -3,6 +3,7 @@ const Color = @import("color.zig").Color;
 const evaluate = @import("evaluate.zig").evaluate;
 const std = @import("std");
 const expect = std.testing.expect;
+const expectEqual = std.testing.expectEqual;
 
 test "Pawn testing" {
     const expected: i64 = 330;
@@ -28,22 +29,27 @@ test "Knight, rook, bishop"  {
 
 test "Asymmetrical kings" {
     const expected: i64 = 60;
-    var pos = position.fromFEN("8/8/8/8/8/8/8/K4k2 w KQkq - 0 1") catch unreachable;
-    expect(evaluate(&pos) == expected);
+    var pos = position.fromFEN("8/8/8/8/8/8/8/K4k2 w - - 0 1") catch unreachable;
+
+    expectEqual(expected, evaluate(&pos));
+
     pos.to_move = switch (pos.to_move) {
         Color.white => Color.black,
         Color.black => Color.white,
     };
-    expect(evaluate(&pos) == -expected);
+    expectEqual(-expected, evaluate(&pos));
 }
 
 test "Starting position" {
     const expected: i64 = 0;
     var pos = position.fromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") catch unreachable;
-    expect(evaluate(&pos) == expected);
+
+    expectEqual(expected, evaluate(&pos));
+
     pos.to_move = switch (pos.to_move) {
         Color.white => Color.black,
         Color.black => Color.white,
     };
-    expect(evaluate(&pos) == -expected);
+
+    expectEqual(-expected, evaluate(&pos));
 }

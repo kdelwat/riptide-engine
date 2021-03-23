@@ -101,14 +101,14 @@ pub const Bitboard = struct {
 // a7, b7, c7, d7, e7, f7, g7, h7,  48 .. 55
 // a8, b8, c8, d8, e8, f8, g8, h8   56 .. 63
 
-pub fn bitboardIndex(file_index: u8, rank_index: u8) u8 {
+pub inline fn bitboardIndex(file_index: u8, rank_index: u8) u8 {
     return 8 * rank_index + file_index;
 }
 
-fn fileIndex(bitboard_index: u8) u8 {
+pub inline fn fileIndex(bitboard_index: u8) u8 {
     return bitboard_index & 7;
 }
 
-fn rankIndex(bitboard_index: u8) u8 {
+pub inline fn rankIndex(bitboard_index: u8) u8 {
     return bitboard_index >> 3;
 }

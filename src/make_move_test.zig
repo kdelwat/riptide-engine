@@ -33,7 +33,7 @@ test "Capture" {
 
     const expected_pos = position.fromFEN("rnbqkb1r/pppp1ppp/8/1B2p3/4n3/8/PPPP1PPP/RNBQK1NR w KQkq - 0 4") catch unreachable;
 
-    const m = Move.initCapture(45, 28, Color.black, PieceType.knight, Color.white, PieceType.pawn);
+    const m = Move.initCapture(45, 28, Color.black, PieceType.knight, PieceType.pawn);
     expect(m.is(MoveType.capture));
 
     const artifacts = make_move.makeMove(&starting_pos, m);
