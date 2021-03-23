@@ -5,7 +5,7 @@ const expect = std.testing.expect;
 const test_allocator = std.testing.allocator;
 
 fn fromFEN(f: []const u8) position.Position {
-    return position.fromFEN(f) catch unreachable;
+    return position.fromFEN(f, test_allocator) catch unreachable;
 }
 
 // Martin Sedlak's test positions

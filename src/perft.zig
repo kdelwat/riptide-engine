@@ -1,10 +1,13 @@
 const position = @import("./position.zig");
-const move = @import("./move.zig");
+const Move = @import("./move.zig").Move;
+const MoveType = @import("./move.zig").MoveType;
 const make_move = @import("./make_move.zig");
 const movegen = @import("./movegen.zig");
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
+const color = @import("./color.zig");
+const attack = @import("./attack.zig");
 
 // perft is a performance test for the move generation function. It generates a
 // move tree to a given depth, recording various information. This information can
@@ -57,34 +60,38 @@ pub fn perft(pos: *position.Position, depth: u64, a: *Allocator) PerftResults {
     }
 
     // Generate all moves for the position.
-    var moves = ArrayList(u32).init(a);
+    var moves = ArrayList(?Move).init(a);
     defer moves.deinit();
-    movegen.generateMoves(&moves, pos.*);
+    movegen.generateMoves(&moves, pos);
 
     var checked: u8 = 0;
 
     // Make each move, recording information about the move.
     // TODO: maybe use generateLegalMoves above and increment checked when move == NULL_MOVE?
-    for (moves.items) |m| {
+    for (moves.items) |opt_m| {
+        // Pseudo-legal move generator doesn't return nulls.
+        const m = opt_m orelse unreachable;
+
         var current_player = pos.to_move;
         const artifacts = make_move.makeMove(pos, m);
 
-        if (!movegen.isKingInCheck(pos.*, current_player)) {
-            if (move.isQuiet(m)) {
+        var attack_map = attack.generateAttackMap(pos, color.invert(current_player));
+        if (!movegen.isKingInCheck(pos.*, current_player, attack_map)) {
+            if (m.is(.quiet)) {
                 results.quiet += 1;
-            } else if (move.isQueenCastle(m)) {
+            } else if (m.is(.queenside_castle)) {
                 results.castle_queen_side += 1;
-            } else if (move.isKingCastle(m)) {
+            } else if (m.is(.kingside_castle)) {
                 results.castle_king_side += 1;
-            } else if (move.isPromotionCapture(m)) {
+            } else if (m.isPromotionCapture()) {
                 results.promo_capture += 1;
-            } else if (move.isPromotion(m)) {
+            } else if (m.isPromotion()) {
                 results.promotion += 1;
-            } else if (move.isEnPassantCapture(m)) {
+            } else if (m.is(.en_passant)) {
                 results.enpassant += 1;
-            } else if (move.isDoublePawnPush(m)) {
+            } else if (m.is(.double_pawn_push)) {
                 results.pawn_jump += 1;
-            } else if (move.isCapture(m)) {
+            } else if (m.isCapture()) {
                 results.captures += 1;
             }
 
