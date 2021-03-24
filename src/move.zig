@@ -3,6 +3,7 @@ const PieceType = piece.PieceType;
 const std = @import("std");
 const Color = @import("./color.zig").Color;
 const color = @import("./color.zig");
+const bitboard = @import("./bitboard.zig");
 
 pub const MoveType = enum(u4) {
     quiet                = 0b0000,
@@ -149,29 +150,26 @@ pub const Move = struct {
         };
     }
 
-    pub fn toLongAlgebraic(self: Move) ![]const u8 {
-        var ret: [5]u8 = undefined;
-
+    pub fn toLongAlgebraic(self: Move, buf: []u8) !void {
         const to = self.to;
         const from = self.from;
-        const to_rank = to / 16 + 1;
-        const to_file = (to % 16) + 'a';
-        const from_rank = from / 16 + 1;
-        const from_file = (from % 16) + 'a';
+        const to_rank = bitboard.rankIndex(to) + '1';
+        const to_file = bitboard.fileIndex(to) + 'a';
+        const from_rank = bitboard.rankIndex(from) + '1';
+        const from_file = bitboard.fileIndex(from) + 'a';
 
         if (self.isPromotion()) {
             const promotion_piece = self.getPromotedPiece();
-
-            return try std.fmt.bufPrint(
-                ret[0..],
-                "{c}{d}{c}{d}{c}",
+            _ = try std.fmt.bufPrint(
+                buf,
+                "{c}{c}{c}{c}{c}",
                 .{from_file, from_rank, to_file, to_rank, pieceToCharColorblind(promotion_piece)},
             );
         }
 
-        return try std.fmt.bufPrint(
-            ret[0..],
-            "{c}{d}{c}{d}",
+        _ = try std.fmt.bufPrint(
+            buf,
+            "{c}{c}{c}{c}",
             .{from_file, from_rank, to_file, to_rank},
         );
     }

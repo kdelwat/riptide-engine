@@ -147,10 +147,8 @@ fn generatePawnCaptures(moves: *ArrayList(?Move), pos: *position.Position) !void
     // promotion capture moves. Otherwise generate a capture move.
     while (east_captures != 0) {
         const to = bitscanForwardAndReset(&east_captures);
-
-        // TODO: might be wrong way around
         const from = switch(pos.to_move) {
-            Color.white => to - 7,
+            Color.white => to - 9,
             Color.black => to + 7,
         };
 
@@ -170,9 +168,8 @@ fn generatePawnCaptures(moves: *ArrayList(?Move), pos: *position.Position) !void
 
     while (west_captures != 0) {
         const to = bitscanForwardAndReset(&west_captures);
-        // TODO: might be wrong way around
         const from = switch(pos.to_move) {
-            Color.white => to - 9,
+            Color.white => to - 7,
             Color.black => to + 9,
         };
 

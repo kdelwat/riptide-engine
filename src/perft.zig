@@ -132,3 +132,28 @@ pub fn perft(pos: *position.Position, depth: u64, a: *Allocator) PerftResults {
 
     return results;
 }
+
+// Run a perft analysis, but divide the initial level of the move tree. This
+// allows for debugging the problematic paths of move generation.
+pub fn dividePerft(pos: *position.Position, depth: u64, a: *Allocator) void {
+    // Generate all legal moves for the position.
+    var moves = ArrayList(?Move).init(a);
+    defer moves.deinit();
+    movegen.generateLegalMoves(&moves, pos);
+
+    var total: u64 = 0;
+    for (moves.items) |opt_m| {
+        if (opt_m) |m| {
+            const artifacts = make_move.makeMove(pos, m);
+            const results = perft(pos, depth - 1, a);
+
+            var buf: [5]u8 = [_]u8{0,0,0,0,0};
+            m.toLongAlgebraic(buf[0..]) catch unreachable;
+            std.debug.print("{s}: {}, {} -> {}\n", .{buf, results.nodes, m.from, m.to});
+            total += results.nodes;
+            make_move.unmakeMove(pos, m, artifacts);
+        }
+    }
+
+    std.debug.print("TOTAL: {}\n", .{total});
+}

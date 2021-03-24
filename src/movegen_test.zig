@@ -337,6 +337,15 @@ test "generateLegalMoves - Weird check" {
     moves.deinit();
 }
 
+
+test "generateLegalMoves - Buggy position" {
+    var moves = ArrayList(?Move).init(test_allocator);
+    var pos = fromFEN("rnbqkbnr/ppppppp1/8/7p/6P1/8/PPPPPP1P/RNBQKBNR w KQkq h6 0 1");
+    generateLegalMoves(&moves, &pos);
+    expectEqual(@as(u32, 22), countNonNullMoves(&moves));
+    moves.deinit();
+}
+
 test "isKingInCheck" {
     var pos = fromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     var attack_map = attack.generateAttackMap(&pos, Color.black);

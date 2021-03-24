@@ -141,11 +141,11 @@ fn handleCommand(input: []const u8, logger: Logger, a: *Allocator) !bool {
         },
 
         UciCommandType.position_startpos => |moves| {
-            startNewGame(start_position);
+            startNewGame(start_position, a);
         },
 
         UciCommandType.ucinewgame =>
-            startNewGame(start_position),
+            startNewGame(start_position, a),
 
         UciCommandType.position => |pos| {
             engine_data = GlobalData{
@@ -171,9 +171,9 @@ fn handleCommand(input: []const u8, logger: Logger, a: *Allocator) !bool {
     return false;
 }
 
-fn startNewGame(pos: []const u8) void {
+fn startNewGame(pos: []const u8, a: *Allocator) void {
     engine_data = GlobalData{
-       .pos = position.fromFEN(start_position) catch unreachable,
+       .pos = position.fromFEN(start_position, a) catch unreachable,
        .best_move = null,
     };
 }
@@ -279,7 +279,9 @@ fn stopAnalysis(logger: Logger) !void {
 
 fn sendBestMove(opt_m: ?Move, logger: Logger) !void {
     if (opt_m) |m| {
-        try logger.outgoing("bestmove {}", .{try m.toLongAlgebraic()});
+        var buf: [5]u8 = [_]u8{0,0,0,0, 0};
+        try m.toLongAlgebraic(buf[0..]);
+        try logger.outgoing("bestmove {s}", .{buf});
     } else {
         try logger.log("MAIN", "null move returned from search", .{});
     }
