@@ -279,9 +279,13 @@ fn stopAnalysis(logger: Logger) !void {
 
 fn sendBestMove(opt_m: ?Move, logger: Logger) !void {
     if (opt_m) |m| {
-        var buf: [5]u8 = [_]u8{0,0,0,0, 0};
+        var buf: [5]u8 = [_]u8{0,0,0,0,0};
         try m.toLongAlgebraic(buf[0..]);
-        try logger.outgoing("bestmove {s}", .{buf});
+        if (buf[4] == 0) {
+            try logger.outgoing("bestmove {s}", .{buf[0..4]});
+        } else {
+            try logger.outgoing("bestmove {s}", .{buf});
+        }
     } else {
         try logger.log("MAIN", "null move returned from search", .{});
     }
