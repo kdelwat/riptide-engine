@@ -14,6 +14,7 @@ const worker = @import("./worker.zig");
 const Allocator = std.mem.Allocator;
 const test_allocator = std.testing.allocator;
 const Logger = @import("./logger.zig").Logger;
+const builtin = @import("builtin");
 
 const start_position = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
@@ -85,13 +86,15 @@ pub fn main() anyerror!void {
     // Get file descriptors for IO
     const stdin = std.io.getStdIn();
 
+    const logfile_path: []const u8 = if (builtin.os.tag == std.Target.Os.Tag.windows) "C:/Users/cadel/Documents/Chess/riptide/riptide_logs.txt" else "/mnt/c/Users/cadel/Documents/Chess/riptide/riptide_logs.txt";
+
     const logfile = try std.fs.createFileAbsolute(
-        "C:/Users/cadel/Documents/Chess/riptide/riptide_logs.txt",
+        logfile_path,
         .{ .read = true },
     );
     defer logfile.close();
 
-    const logger: Logger = try Logger.initFile("C:/Users/cadel/Documents/Chess/riptide/riptide_logs.txt");
+    const logger: Logger = try Logger.initFile(logfile_path);
     defer logger.deinit();
 
     // Set up allocator with default options
