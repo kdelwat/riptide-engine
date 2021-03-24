@@ -64,18 +64,14 @@ pub inline fn northWestOne(b: u64) u64 {
 }
 
 // Find the least significant 1 in the bitboard
-pub fn bitscanForward(b: u64) u8 {
-    if (b == 0) {
-        // TODO: not sure if this should ever happen?
-        unreachable;
-    }
-
+// The caller is responsible for not passing in b == 0
+pub inline fn bitscanForward(b: u64) u8 {
     // Count trailing zeroes is equivalent to a bitscan forward
     return @ctz(u64, b);
 }
 
 // Find the least significant 1 and remove it.
-pub fn bitscanForwardAndReset(b: *u64) u8 {
+pub inline fn bitscanForwardAndReset(b: *u64) u8 {
     const ret = bitscanForward(b.*);
     b.* &= b.* - 1;
     return ret;
