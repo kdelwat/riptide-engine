@@ -6,7 +6,7 @@ time.
 
 ## Features
 
-* Board representation: 0x88
+* Board representation: bitboard
 * Move generation: pseudo-legal generation followed by legality check. 100% correct on Perft tests.
 * Search: negamax with alpha-beta pruning
 
