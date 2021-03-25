@@ -9,217 +9,69 @@ const MoveGenerator = @import("./movegen.zig").MoveGenerator;
 const isKingInCheck = @import("./movegen.zig").isKingInCheck;
 const attack = @import("./attack.zig");
 const Color = @import("./color.zig").Color;
+const color = @import("./color.zig");
 
 fn fromFEN(f: []const u8) position.Position {
     return position.fromFEN(f, test_allocator) catch unreachable;
 }
 
-//test "generateMoves - Starting position" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 20), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
-//
-//test "generateMoves - King movement" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("8/5k2/8/8/3K4/8/8/8 w - - 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 8), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
-//
-//test "generateMoves - Rook sliding normal" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("8/5k2/8/8/3R4/8/8/K7 w - - 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 17), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
-//
-//test "generateMoves - Rook attacking" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("3p4/5k2/8/8/1p1R2p1/8/8/K7 w - - 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 15), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
-//
-//test "generateMoves - Bishop sliding normal" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("8/7k/8/8/3B4/8/8/K7 w - - 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 15), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
-//
-//test "generateMoves - Queen sliding normal" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("8/7k/8/8/3Q4/8/8/K7 w - - 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 29), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
-//
-//test "generateMoves - Knight in centre" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("8/7k/8/8/3N4/8/8/K7 w - - 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 11), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
-//
-//test "generateMoves - Knight on edge" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("8/7k/8/8/N7/8/8/K7 w - - 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 7), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
-//
-//test "generateMoves - Pawn at start" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("8/7k/8/8/8/8/3P4/K7 w - - 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 5), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
-//
-//test "generateMoves - Pawn after moving" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("8/7k/8/8/8/3P4/8/K7 w - - 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 4), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
-//
-//test "generateMoves - Pawn captures" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("7k/8/8/8/8/2p1p3/3P4/K7 w - - 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 7), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
-//
-//test "generateMoves - En passant capture" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("8/7k/8/3Pp3/8/8/8/K7 w - e6 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 5), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
-//
-//test "generateMoves - Two en passant options" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("8/7k/8/3PpP2/8/8/8/K7 w - e6 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 7), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
-//
-//test "generateMoves - Black pawn at start" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("k7/4p3/8/8/8/8/8/4K3 b - - 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 5), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
-//
-//test "generateMoves - Black pawn captures" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("k7/4p3/3P1P2/8/8/8/8/4K3 b - - 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 7), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
-//
-//test "generateMoves - Black two en passant options" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("k7/8/8/8/4pPp1/8/8/4K3 b - f3 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 7), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
-//
-//test "generateMoves - Promotion" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("8/2P4k/8/8/8/8/8/K7 w - - 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 7), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
-//
-//test "generateMoves - Capture promotion" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("2q4k/3P4/8/8/8/8/8/K7 w - - 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 11), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
-//
-//test "generateMoves - Black promotion" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("k7/8/8/8/8/8/2p5/4K3 b - - 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 7), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
-//
-//test "generateMoves - Kingside castle" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("8/5k2/8/8/8/8/8/4K2R w K - 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 15), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
-//
-//test "generateMoves - Both side castle" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("8/5k2/8/8/8/8/8/R3K2R w KQ - 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 26), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
-//
-//test "generateMoves - No castle" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("8/5k2/8/8/8/8/8/1R2K1R1 w - - 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 24), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
-//
-//test "generateMoves - Black kingside castle" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("r2k4/8/8/8/8/8/8/4K3 b k - 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 15), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
-//
-//test "generateMoves - Black king" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("8/5k2/8/8/8/8/8/1R2K1R1 b - - 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 8), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
-//
-//test "generateMoves - Can't castle through check" {
-//    var moves = ArrayList(?Move).init(test_allocator);
-//    var pos = fromFEN("k5q1/8/8/8/8/8/8/4K2R w K - 0 1");
-//    generateMoves(&moves, &pos);
-//    expectEqual(@as(u32, 14), countNonNullMoves(&moves));
-//    moves.deinit();
-//}
 
 const LegalMovegenTestCase = struct {
     position: []const u8,
     expected: u64,
 };
 
-var LEGAL_MOVE_TEST_CASES = [16]LegalMovegenTestCase{
+var LEGAL_MOVE_TEST_CASES = [41]LegalMovegenTestCase{
+    // Starting position
+    LegalMovegenTestCase{.position = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", .expected = 20},
+    // King movement
+    LegalMovegenTestCase{.position = "8/5k2/8/8/3K4/8/8/8 w - - 0 1", .expected = 8},
+    // Rook sliding normal
+    LegalMovegenTestCase{.position = "8/5k2/8/8/3R4/8/8/K7 w - - 0 1", .expected = 17},
+    // Rook attacking
+    LegalMovegenTestCase{.position = "3p4/5k2/8/8/1p1R2p1/8/8/K7 w - - 0 1", .expected = 15},
+    // Bishop sliding normal
+    LegalMovegenTestCase{.position = "8/7k/8/8/3B4/8/8/K7 w - - 0 1", .expected = 15},
+    // Queen sliding normal
+    LegalMovegenTestCase{.position = "8/7k/8/8/3Q4/8/8/K7 w - - 0 1", .expected = 29},
+    // Knight in centre
+    LegalMovegenTestCase{.position = "8/7k/8/8/3N4/8/8/K7 w - - 0 1", .expected = 11},
+    // Knight on edge
+    LegalMovegenTestCase{.position = "8/7k/8/8/N7/8/8/K7 w - - 0 1", .expected = 7},
+    // Pawn at start
+    LegalMovegenTestCase{.position = "8/7k/8/8/8/8/3P4/K7 w - - 0 1", .expected = 5},
+    // Pawn after moving
+    LegalMovegenTestCase{.position = "8/7k/8/8/8/3P4/8/K7 w - - 0 1", .expected = 4},
+    // Pawn captures
+    LegalMovegenTestCase{.position = "7k/8/8/8/8/2p1p3/3P4/K7 w - - 0 1", .expected = 6},
+    // En passant capture
+    LegalMovegenTestCase{.position = "8/7k/8/3Pp3/8/8/8/K7 w - e6 0 1", .expected = 5},
+    // Two en passant options
+    LegalMovegenTestCase{.position = "8/7k/8/3PpP2/8/8/8/K7 w - e6 0 1", .expected = 7},
+    // Black pawn at start
+    LegalMovegenTestCase{.position = "k7/4p3/8/8/8/8/8/4K3 b - - 0 1", .expected = 5},
+    // Black pawn captures
+    LegalMovegenTestCase{.position = "k7/4p3/3P1P2/8/8/8/8/4K3 b - - 0 1", .expected = 7},
+    // Black two en passant options
+    LegalMovegenTestCase{.position = "k7/8/8/8/4pPp1/8/8/4K3 b - f3 0 1", .expected = 7},
+    // Promotion
+    LegalMovegenTestCase{.position = "8/2P4k/8/8/8/8/8/K7 w - - 0 1", .expected = 7},
+    // Capture promotion
+    LegalMovegenTestCase{.position = "2q4k/3P4/8/8/8/8/8/K7 w - - 0 1", .expected = 11},
+    // Black promotion
+    LegalMovegenTestCase{.position = "k7/8/8/8/8/8/2p5/4K3 b - - 0 1", .expected = 7},
+    // Kingside castle
+    LegalMovegenTestCase{.position = "8/5k2/8/8/8/8/8/4K2R w K - 0 1", .expected = 15},
+    // Both side castle
+    LegalMovegenTestCase{.position = "8/5k2/8/8/8/8/8/R3K2R w KQ - 0 1", .expected = 26},
+    // No castle
+    LegalMovegenTestCase{.position = "8/5k2/8/8/8/8/8/1R2K1R1 w - - 0 1", .expected = 24},
+    // Black kingside castle
+    LegalMovegenTestCase{.position = "4k2r/8/8/8/8/8/8/4K3 w k - 0 1", .expected = 5},
+    // Black king
+    LegalMovegenTestCase{.position = "8/5k2/8/8/8/8/8/1R2K1R1 b - - 0 1", .expected = 5},
+    // Can't castle through check
+    LegalMovegenTestCase{.position = "k5q1/8/8/8/8/8/8/4K2R w K - 0 1", .expected = 14},
     // JetChess test cases
     LegalMovegenTestCase{.position = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", .expected = 48},
     LegalMovegenTestCase{.position = "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", .expected = 14},
@@ -233,10 +85,8 @@ var LEGAL_MOVE_TEST_CASES = [16]LegalMovegenTestCase{
     LegalMovegenTestCase{.position = "8/6pp/8/p5p1/Pp6/1P3p2/pPK4P/krQ4R w - - 0 1", .expected = 18},
     LegalMovegenTestCase{.position = "rnbqkbnr/ppp1pppp/8/3p4/2P5/8/PP1PPPPP/RNBQKBNR w KQkq - 0 2", .expected = 23},
     LegalMovegenTestCase{.position = "rnbqkbnr/ppp1pppp/8/3p4/Q1P5/8/PP1PPPPP/RNB1KBNR b KQkq - 1 2", .expected = 6},
-
     // Checkmate
     LegalMovegenTestCase{.position = "rnb1kbnr/pppp1ppp/8/4p3/5PPq/8/PPPPP2P/RNBQKBNR w KQkq - 1 3", .expected = 0},
-
     // Weird test cases
     LegalMovegenTestCase{.position = "8/8/8/8/k7/2p5/2KP4/7R b - - 1 2", .expected = 5},
     LegalMovegenTestCase{.position = "8/8/8/8/k7/8/2Kp4/2R5 b - - 1 3", .expected = 12},
@@ -254,20 +104,24 @@ test "generateLegalMoves" {
     }
 }
 
+const IsKingInCheckTestCase = struct {
+    position: []const u8,
+    to_move: Color,
+    expected: bool,
+};
+
+var KING_IN_CHECK_TEST_CASES = [4]IsKingInCheckTestCase{
+    IsKingInCheckTestCase{.position = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", .to_move = Color.white, .expected = false},
+    IsKingInCheckTestCase{.position = "rnbqkb1r/ppp1pp1p/6p1/1B1n4/3P4/2N5/PP2PPPP/R1BQK1NR b KQkq - 0 1", .to_move = Color.black, .expected = true},
+    IsKingInCheckTestCase{.position = "rnbq1b1r/pppkpppp/3pPn2/8/2PP4/8/PP3PPP/RNBQKBNR w KQkq - 0 1", .to_move = Color.white, .expected = false},
+    IsKingInCheckTestCase{.position = "rnbq1b1r/pppkpppp/3pPn2/8/2PP4/8/PP3PPP/RNBQKBNR b KQkq - 0 1", .to_move = Color.black, .expected = true},
+};
+
 test "isKingInCheck" {
-    var pos = fromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-    var attack_map = attack.generateAttackMap(&pos, Color.black);
-    expect(isKingInCheck(pos, Color.white, attack_map) == false);
-
-    pos = fromFEN("rnbqkb1r/ppp1pp1p/6p1/1B1n4/3P4/2N5/PP2PPPP/R1BQK1NR b KQkq - 0 1");
-    attack_map = attack.generateAttackMap(&pos, Color.white);
-    expect(isKingInCheck(pos, Color.black, attack_map) == true);
-
-    pos = fromFEN("rnbq1b1r/pppkpppp/3pPn2/8/2PP4/8/PP3PPP/RNBQKBNR w KQkq - 0 1");
-    attack_map = attack.generateAttackMap(&pos, Color.black);
-    expect(isKingInCheck(pos, Color.white, attack_map) == false);
-
-    pos = fromFEN("rnbq1b1r/pppkpppp/3pPn2/8/2PP4/8/PP3PPP/RNBQKBNR b KQkq - 0 1");
-    attack_map = attack.generateAttackMap(&pos, Color.white);
-    expect(isKingInCheck(pos, Color.black, attack_map) == true);
+    for (KING_IN_CHECK_TEST_CASES) |test_case| {
+        std.debug.print("isKingInCheck: {s}\n", .{test_case.position});
+        var pos = fromFEN(test_case.position);
+        var attack_map = attack.generateAttackMap(&pos, color.invert(test_case.to_move));
+        expectEqual(test_case.expected, isKingInCheck(pos, Color.white, attack_map));
+    }
 }
