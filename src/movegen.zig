@@ -13,48 +13,72 @@ const debug = @import("./debug.zig");
 const castling = @import("./castling.zig");
 usingnamespace @import("./bitboard_ops.zig");
 
-// Generate legal moves for a position.
-pub fn generateLegalMoves(moves: *ArrayList(?Move), pos: *position.Position) void {
-    const attacker: Color = switch (pos.to_move) {
-        Color.white => Color.black,
-        Color.black => Color.white,
-    };
+const AVERAGE_BRANCHING_FACTOR = 38;
+const MAX_DEPTH = 20;
+const MOVE_ARRAY_SIZE = AVERAGE_BRANCHING_FACTOR * MAX_DEPTH;
 
-    generateMoves(moves, pos);
+pub const MoveGenerator = struct {
+    moves: [MOVE_ARRAY_SIZE]Move,
+    next_to_play: [MAX_DEPTH]usize,
+    next_to_generate: [MAX_DEPTH]usize,
+    ply: usize,
 
-    const current_player = pos.to_move;
-
-    // For each pseudo-legal move, make the move, then see if the king is in
-    // check. If it isn't, the move is legal.
-    for (moves.items) |opt_m, i| {
-        // TODO: additional overhead not needed
-        if (opt_m) |m| {
-            const artifacts = make_move.makeMove(pos, m);
-
-            const attack_map = attack.generateAttackMap(pos, attacker);
-            if (isKingInCheck(pos.*, current_player, attack_map)) {
-                moves.items[i] = null;
-            }
-
-            make_move.unmakeMove(pos, m, artifacts);
-        }
-    }
-}
-
-pub fn countNonNullMoves(moves: *ArrayList(?Move)) u32 {
-    var count: u32 = 0;
-
-    for (moves.items) |opt_m| {
-        if (opt_m) |m| {
-            count += 1;
-        }
+    pub fn init() MoveGenerator {
+        return MoveGenerator{
+            .moves = undefined, // This can be junk, we'll take care of filling it gradually
+            .next_to_play = [_]usize{0} ** MAX_DEPTH,
+            .next_to_generate = [_]usize{0} ** MAX_DEPTH,
+            .ply = 0,
+        };
     }
 
-    return count;
-}
+    pub fn next(self: *MoveGenerator) ?Move {
+        if (self.next_to_play[self.ply] == self.next_to_generate[self.ply]) {
+            return null;
+        }
+
+        self.next_to_play[self.ply] += 1;
+
+        return self.moves[self.next_to_play[self.ply] - 1];
+    }
+
+    pub fn generate(self: *MoveGenerator, pos: *position.Position) void {
+        // Calling generate will increase the ply by 1, since it's called for each level of the alpha-beta search
+        self.ply += 1;
+
+        // Set move pointers to the last value before generation
+        self.next_to_generate[self.ply] = self.next_to_generate[self.ply - 1];
+        self.next_to_play[self.ply] = self.next_to_generate[self.ply - 1];
+
+        generateMoves(self, pos);
+
+        // TODO: ordering
+    }
+
+    pub fn count(self: *MoveGenerator) u64 {
+        return self.next_to_generate[self.ply] - self.next_to_play[self.ply];
+    }
+
+    fn addLegal(self: *MoveGenerator, move: Move, pos: *position.Position) void {
+        const artifacts = make_move.makeMove(pos, move);
+
+        const attack_map = attack.generateAttackMap(pos, pos.to_move);
+        if (!isKingInCheck(pos.*, color.invert(pos.to_move), attack_map)) {
+            self.add(move);
+        }
+
+        make_move.unmakeMove(pos, move, artifacts);
+    }
+
+    fn add(self: *MoveGenerator, move: Move) void {
+        self.moves[self.next_to_generate[self.ply]] = move;
+        self.next_to_generate[self.ply] += 1;
+    }
+};
 
 // Generate pseudo-legal moves for a position
-pub fn generateMoves(moves: *ArrayList(?Move), pos: *position.Position) void {
+// Moves will be filtered for legality by the move generator
+pub fn generateMoves(moves: *MoveGenerator, pos: *position.Position) void {
     generatePawnMoves(moves, pos) catch unreachable;
     generatePawnCaptures(moves, pos) catch unreachable;
     generateKnightMoves(moves, pos) catch unreachable;
@@ -70,7 +94,7 @@ pub fn generateMoves(moves: *ArrayList(?Move), pos: *position.Position) void {
 const RANK_4: u64 = 0x00000000FF000000;
 const RANK_5: u64 = 0x000000FF00000000;
 
-fn generatePawnMoves(moves: *ArrayList(?Move), pos: *position.Position) !void {
+fn generatePawnMoves(moves: *MoveGenerator, pos: *position.Position) !void {
     const empty = pos.board.empty();
     const pawns = pos.board.get(PieceType.pawn, pos.to_move);
 
@@ -99,12 +123,12 @@ fn generatePawnMoves(moves: *ArrayList(?Move), pos: *position.Position) !void {
         };
 
         if (isOnRank(to, promotion_rank)) {
-            try moves.append(Move.initPromotion(from, to, pos.to_move, PieceType.queen));
-            try moves.append(Move.initPromotion(from, to, pos.to_move, PieceType.knight));
-            try moves.append(Move.initPromotion(from, to, pos.to_move, PieceType.rook));
-            try moves.append(Move.initPromotion(from, to, pos.to_move, PieceType.bishop));
+            moves.addLegal(Move.initPromotion(from, to, pos.to_move, PieceType.queen), pos);
+            moves.addLegal(Move.initPromotion(from, to, pos.to_move, PieceType.knight), pos);
+            moves.addLegal(Move.initPromotion(from, to, pos.to_move, PieceType.rook), pos);
+            moves.addLegal(Move.initPromotion(from, to, pos.to_move, PieceType.bishop), pos);
         } else {
-            try moves.append(Move.initQuiet(from, to, pos.to_move, PieceType.pawn));
+            moves.addLegal(Move.initQuiet(from, to, pos.to_move, PieceType.pawn), pos);
         }
     }
 
@@ -115,11 +139,11 @@ fn generatePawnMoves(moves: *ArrayList(?Move), pos: *position.Position) !void {
             Color.white => to - 16,
             Color.black => to + 16,
         };
-        try moves.append(Move.initDoublePawnPush(from, to, pos.to_move));
+        moves.addLegal(Move.initDoublePawnPush(from, to, pos.to_move), pos);
     }
 }
 
-fn generatePawnCaptures(moves: *ArrayList(?Move), pos: *position.Position) !void {
+fn generatePawnCaptures(moves: *MoveGenerator, pos: *position.Position) !void {
     var opponent_pieces = pos.board.getColor(color.invert(pos.to_move));
 
     if (pos.en_passant_target != 0) {
@@ -155,14 +179,14 @@ fn generatePawnCaptures(moves: *ArrayList(?Move), pos: *position.Position) !void
         const captured_piece_type = pos.board.getPieceTypeAt(to);
 
         if (isOnRank(to, promotion_rank)) {
-            try moves.append(Move.initPromotionCapture(from, to, pos.to_move, PieceType.queen, captured_piece_type));
-            try moves.append(Move.initPromotionCapture(from, to, pos.to_move, PieceType.knight, captured_piece_type));
-            try moves.append(Move.initPromotionCapture(from, to, pos.to_move, PieceType.rook, captured_piece_type));
-            try moves.append(Move.initPromotionCapture(from, to, pos.to_move, PieceType.bishop, captured_piece_type));
+            moves.addLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.queen, captured_piece_type), pos);
+            moves.addLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.knight, captured_piece_type), pos);
+            moves.addLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.rook, captured_piece_type), pos);
+            moves.addLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.bishop, captured_piece_type), pos);
         } else if (to == pos.en_passant_target) {
-            try moves.append(Move.initEnPassant(from, to, pos.to_move));
+            moves.addLegal(Move.initEnPassant(from, to, pos.to_move), pos);
         } else {
-            try moves.append(Move.initCapture(from, to, pos.to_move, PieceType.pawn, captured_piece_type));
+            moves.addLegal(Move.initCapture(from, to, pos.to_move, PieceType.pawn, captured_piece_type), pos);
         }
     }
 
@@ -176,19 +200,19 @@ fn generatePawnCaptures(moves: *ArrayList(?Move), pos: *position.Position) !void
         const captured_piece_type = pos.board.getPieceTypeAt(to);
 
         if (isOnRank(to, promotion_rank)) {
-            try moves.append(Move.initPromotionCapture(from, to, pos.to_move, PieceType.queen, captured_piece_type));
-            try moves.append(Move.initPromotionCapture(from, to, pos.to_move, PieceType.knight, captured_piece_type));
-            try moves.append(Move.initPromotionCapture(from, to, pos.to_move, PieceType.rook, captured_piece_type));
-            try moves.append(Move.initPromotionCapture(from, to, pos.to_move, PieceType.bishop, captured_piece_type));
+            moves.addLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.queen, captured_piece_type), pos);
+            moves.addLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.knight, captured_piece_type), pos);
+            moves.addLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.rook, captured_piece_type), pos);
+            moves.addLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.bishop, captured_piece_type), pos);
         } else if (to == pos.en_passant_target) {
-            try moves.append(Move.initEnPassant(from, to, pos.to_move));
+            moves.addLegal(Move.initEnPassant(from, to, pos.to_move), pos);
         } else {
-            try moves.append(Move.initCapture(from, to, pos.to_move, PieceType.pawn, captured_piece_type));
+            moves.addLegal(Move.initCapture(from, to, pos.to_move, PieceType.pawn, captured_piece_type), pos);
         }
     }
 }
 
-fn generateKnightMoves(moves: *ArrayList(?Move), pos: *position.Position) !void {
+fn generateKnightMoves(moves: *MoveGenerator, pos: *position.Position) !void {
     const opponent_pieces = pos.board.getColor(color.invert(pos.to_move));
     const empty = pos.board.empty();
     var knights = pos.board.get(PieceType.knight, pos.to_move);
@@ -204,18 +228,18 @@ fn generateKnightMoves(moves: *ArrayList(?Move), pos: *position.Position) !void 
 
         while (quiet != 0) {
             const to = bitscanForwardAndReset(&quiet);
-            try moves.append(Move.initQuiet(from, to, pos.to_move, PieceType.knight));
+            moves.addLegal(Move.initQuiet(from, to, pos.to_move, PieceType.knight), pos);
         }
 
         while (captures != 0) {
             const to = bitscanForwardAndReset(&captures);
             const captured_piece_type = pos.board.getPieceTypeAt(to);
-            try moves.append(Move.initCapture(from, to, pos.to_move, PieceType.knight, captured_piece_type));
+            moves.addLegal(Move.initCapture(from, to, pos.to_move, PieceType.knight, captured_piece_type), pos);
         }
     }
 }
 
-fn generateKingMoves(moves: *ArrayList(?Move), pos: *position.Position) !void {
+fn generateKingMoves(moves: *MoveGenerator, pos: *position.Position) !void {
     const opponent_pieces = pos.board.getColor(color.invert(pos.to_move));
     const empty = pos.board.empty();
     const from = pos.getIndexOfKing(pos.to_move);
@@ -226,18 +250,18 @@ fn generateKingMoves(moves: *ArrayList(?Move), pos: *position.Position) !void {
 
     while (quiet != 0) {
         const to = bitscanForwardAndReset(&quiet);
-        try moves.append(Move.initQuiet(from, to, pos.to_move, PieceType.king));
+        moves.addLegal(Move.initQuiet(from, to, pos.to_move, PieceType.king), pos);
     }
 
     while (captures != 0) {
         const to = bitscanForwardAndReset(&captures);
         const captured_piece_type = pos.board.getPieceTypeAt(to);
-        try moves.append(Move.initCapture(from, to, pos.to_move, PieceType.king, captured_piece_type));
+        moves.addLegal(Move.initCapture(from, to, pos.to_move, PieceType.king, captured_piece_type), pos);
     }
 }
 
 // TODO: inefficient, can be improved?
-fn generateSlidingMoves(moves: *ArrayList(?Move), pos: *position.Position) !void {
+fn generateSlidingMoves(moves: *MoveGenerator, pos: *position.Position) !void {
     const empty = pos.board.empty();
     const opponent_pieces = pos.board.getColor(color.invert(pos.to_move));
 
@@ -264,13 +288,13 @@ fn generateSlidingMoves(moves: *ArrayList(?Move), pos: *position.Position) !void
 
         while (quiet != 0) {
             const to = bitscanForwardAndReset(&quiet);
-            try moves.append(Move.initQuiet(from, to, pos.to_move, PieceType.queen));
+            moves.addLegal(Move.initQuiet(from, to, pos.to_move, PieceType.queen), pos);
         }
 
         while (captures != 0) {
             const to = bitscanForwardAndReset(&captures);
             const captured_piece_type = pos.board.getPieceTypeAt(to);
-            try moves.append(Move.initCapture(from, to, pos.to_move, PieceType.queen, captured_piece_type));
+            moves.addLegal(Move.initCapture(from, to, pos.to_move, PieceType.queen, captured_piece_type), pos);
         }
     }
 
@@ -288,13 +312,13 @@ fn generateSlidingMoves(moves: *ArrayList(?Move), pos: *position.Position) !void
 
         while (quiet != 0) {
             const to = bitscanForwardAndReset(&quiet);
-            try moves.append(Move.initQuiet(from, to, pos.to_move, PieceType.rook));
+            moves.addLegal(Move.initQuiet(from, to, pos.to_move, PieceType.rook), pos);
         }
 
         while (captures != 0) {
             const to = bitscanForwardAndReset(&captures);
             const captured_piece_type = pos.board.getPieceTypeAt(to);
-            try moves.append(Move.initCapture(from, to, pos.to_move, PieceType.rook, captured_piece_type));
+            moves.addLegal(Move.initCapture(from, to, pos.to_move, PieceType.rook, captured_piece_type), pos);
         }
     }
 
@@ -313,18 +337,18 @@ fn generateSlidingMoves(moves: *ArrayList(?Move), pos: *position.Position) !void
 
         while (quiet != 0) {
             const to = bitscanForwardAndReset(&quiet);
-            try moves.append(Move.initQuiet(from, to, pos.to_move, PieceType.bishop));
+            moves.addLegal(Move.initQuiet(from, to, pos.to_move, PieceType.bishop), pos);
         }
 
         while (captures != 0) {
             const to = bitscanForwardAndReset(&captures);
             const captured_piece_type = pos.board.getPieceTypeAt(to);
-            try moves.append(Move.initCapture(from, to, pos.to_move, PieceType.bishop, captured_piece_type));
+            moves.addLegal(Move.initCapture(from, to, pos.to_move, PieceType.bishop, captured_piece_type), pos);
         }
     }
 }
 
-fn generateCastlingMoves(moves: *ArrayList(?Move), pos: *position.Position) !void {
+fn generateCastlingMoves(moves: *MoveGenerator, pos: *position.Position) !void {
     // Return early if no castling is possible; this saves the attack generation cost
     if (!castling.hasCastlingRight(pos.castling, pos.to_move, castling.CastleSide.king)
         and !castling.hasCastlingRight(pos.castling, pos.to_move, castling.CastleSide.queen)) {
@@ -342,11 +366,11 @@ fn generateCastlingMoves(moves: *ArrayList(?Move), pos: *position.Position) !voi
 
     // Kingside castle
     if (castling.hasCastlingRight(pos.castling, pos.to_move, castling.CastleSide.king) and clearToCastle(pos, castling.CastleSide.king, attack_map)) {
-        try moves.append(Move.initKingsideCastle(pos.to_move));
+        moves.addLegal(Move.initKingsideCastle(pos.to_move), pos);
     }
 
     if (castling.hasCastlingRight(pos.castling, pos.to_move, castling.CastleSide.queen) and clearToCastle(pos, castling.CastleSide.queen, attack_map)) {
-        try moves.append(Move.initQueensideCastle(pos.to_move));
+        moves.addLegal(Move.initQueensideCastle(pos.to_move), pos);
     }
 }
 
