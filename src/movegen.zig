@@ -58,6 +58,12 @@ pub const MoveGenerator = struct {
         return self.moves[self.next_to_play[self.ply] - 1];
     }
 
+    // When a beta cutoff occurs, the usual logic for decrementing the ply is never reached (in next())
+    // The search routine must manually call this function.
+    pub fn cutoff(self: *MoveGenerator) void {
+        self.ply -= 1;
+    }
+
     // Called with a position, generate a list of legal moves
     pub fn generate(self: *MoveGenerator, pos: *position.Position) void {
         // Calling generate will increase the ply by 1, since it's called for each level of the alpha-beta search

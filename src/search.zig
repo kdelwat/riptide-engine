@@ -1,5 +1,5 @@
 const position = @import("./position.zig");
-const movegen = @import("./movegen.zig");
+const MoveGenerator = @import("./movegen.zig").MoveGenerator;
 const make_move = @import("./make_move.zig");
 const Move = @import("./move.zig").Move;
 const evaluate = @import("./evaluate.zig");
@@ -66,32 +66,30 @@ pub fn search(pos: *position.Position, depth: u64, alpha: i64, beta: i64, ctx: S
 //    ctx.logger.log("SEARCH", "\tposition = {s}, depth = {}, alpha = {}, beta = {}", .{debug_buf.items, depth, alpha, beta}) catch unreachable;
 
     // Generate all legal moves for the current position.
-    var moves = ArrayList(?Move).init(ctx.a);
-    defer moves.deinit();
-    movegen.generateLegalMoves(&moves, pos);
-    ctx.logger.log("SEARCH", "\tgenerated starting moves: n = {}", .{moves.items.len}) catch unreachable;
+    var gen = MoveGenerator.init();
+    gen.generate(pos);
+
+    ctx.logger.log("SEARCH", "\tgenerated starting moves: n = {}", .{gen.count()}) catch unreachable;
 
     var best_score: i64 = -100000;
     var best_move: ?Move = null;
 
     // For each move available, run a search of its tree to the given depth, to
     // identify the best outcome.
-    for (moves.items) |opt_m| {
+    while (gen.next()) |m| {
         if (ctx.cancelled.*) {
             break;
         }
 
-        if (opt_m) |m| {
-            const artifacts = make_move.makeMove(pos, m);
-            const negamax_score: i64 = -alphaBeta(pos, alpha, beta, depth, ctx);
+        const artifacts = make_move.makeMove(pos, m);
+        const negamax_score: i64 = -alphaBeta(pos, &gen, alpha, beta, depth, ctx);
 
-            if (negamax_score >= best_score) {
-                best_score = negamax_score;
-                best_move = m;
-            }
-
-            make_move.unmakeMove(pos, m, artifacts);
+        if (negamax_score >= best_score) {
+            best_score = negamax_score;
+            best_move = m;
         }
+
+        make_move.unmakeMove(pos, m, artifacts);
     }
 
     return best_move;
@@ -105,7 +103,7 @@ pub fn search(pos: *position.Position, depth: u64, alpha: i64, beta: i64, ctx: S
 // candidate.
 // This function was implemented from the pseudocode at
 // https://chessprogramming.wikispaces.com/Alpha-Beta.
-fn alphaBeta(pos: *position.Position, alpha: i64, beta: i64, depth: u64, ctx: SearchContext) i64 {
+fn alphaBeta(pos: *position.Position, gen: *MoveGenerator, alpha: i64, beta: i64, depth: u64, ctx: SearchContext) i64 {
     // At the bottom of the tree, return the score of the position for the attacking player.
     if (depth == 0) {
         return evaluate.evaluate(pos);
@@ -114,34 +112,30 @@ fn alphaBeta(pos: *position.Position, alpha: i64, beta: i64, depth: u64, ctx: Se
     var new_alpha: i64 = alpha;
 
     // Otherwise, generate all possible moves.
-    var moves = ArrayList(?Move).init(ctx.a);
-    defer moves.deinit();
-    movegen.generateLegalMoves(&moves, pos);
-    // ctx.stderr.writer().print("??? [ALPHAB] \tgenerated moves: n = {}, depth = {}, alpha = {}, beta = {}\n", .{moves.items.len, depth, alpha, beta}) catch unreachable;
+    gen.generate(pos);
 
-    for (moves.items) |opt_m| {
-        if (opt_m) |m| {
-            // Make the move.
-            const artifacts = make_move.makeMove(pos, m);
+    while (gen.next()) |m| {
+        // Make the move.
+        const artifacts = make_move.makeMove(pos, m);
 
-            // Recursively call the search function to determine the move's score.
-            const score: i64 = -alphaBeta(pos, -beta, -new_alpha, depth - 1, ctx);
+        // Recursively call the search function to determine the move's score.
+        const score: i64 = -alphaBeta(pos, gen, -beta, -new_alpha, depth - 1, ctx);
 
-            // If the score is higher than the beta cutoff, the rest of the search
-            // tree is irrelevant and the cutoff is returned.
-            if (score >= beta) {
-                make_move.unmakeMove(pos, m, artifacts);
-                return beta;
-            }
-
-            // Otherwise, replace the alpha if the new score is higher.
-            if (score > new_alpha) {
-                new_alpha = score;
-            }
-
-            // Restore the pre-move state of the board.
+        // If the score is higher than the beta cutoff, the rest of the search
+        // tree is irrelevant and the cutoff is returned.
+        if (score >= beta) {
             make_move.unmakeMove(pos, m, artifacts);
+            gen.cutoff();
+            return beta;
         }
+
+        // Otherwise, replace the alpha if the new score is higher.
+        if (score > new_alpha) {
+            new_alpha = score;
+        }
+
+        // Restore the pre-move state of the board.
+        make_move.unmakeMove(pos, m, artifacts);
     }
 
     return new_alpha;
