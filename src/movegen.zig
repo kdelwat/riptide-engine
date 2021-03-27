@@ -17,10 +17,20 @@ const AVERAGE_BRANCHING_FACTOR = 38;
 const MAX_DEPTH = 20;
 const MOVE_ARRAY_SIZE = AVERAGE_BRANCHING_FACTOR * MAX_DEPTH;
 
+// The move generator is responsible for legal move generation at each ply of a search
+// Based on the design at https://www.chessprogramming.org/Move_List, the generator allocates a single
+// array once that will be reused through the entire search tree - this dramatically speeds up generation
+// as no allocation occurs after the initial setup.
 pub const MoveGenerator = struct {
     moves: [MOVE_ARRAY_SIZE]Move,
+
+    // next_to_play is the index of the next move to search for the given ply
     next_to_play: [MAX_DEPTH]usize,
+    // next_to_generate is the index of the next empty slot for the given ply (where a generated move
+    // will be inserted)
     next_to_generate: [MAX_DEPTH]usize,
+
+    // the current ply of the search
     ply: usize,
 
     pub fn init() MoveGenerator {
@@ -32,16 +42,23 @@ pub const MoveGenerator = struct {
         };
     }
 
+    // After generation at a certain ply, the search routine should call next() until it returns
+    // null
     pub fn next(self: *MoveGenerator) ?Move {
+        // If we reach the end of the generated moves for this ply, search is complete
+        // Drop down one ply and signal the end of generation
         if (self.next_to_play[self.ply] == self.next_to_generate[self.ply]) {
+            self.ply -= 1;
             return null;
         }
 
+        // Otherwise, return the next generated move
         self.next_to_play[self.ply] += 1;
 
         return self.moves[self.next_to_play[self.ply] - 1];
     }
 
+    // Called with a position, generate a list of legal moves
     pub fn generate(self: *MoveGenerator, pos: *position.Position) void {
         // Calling generate will increase the ply by 1, since it's called for each level of the alpha-beta search
         self.ply += 1;
@@ -55,10 +72,12 @@ pub const MoveGenerator = struct {
         // TODO: ordering
     }
 
+    // Return the remaining moves to be evaluated
     pub fn count(self: *MoveGenerator) u64 {
         return self.next_to_generate[self.ply] - self.next_to_play[self.ply];
     }
 
+    // Add a pseudo-legal move to the move list for the current ply, which is filtered for legality
     fn addLegal(self: *MoveGenerator, move: Move, pos: *position.Position) void {
         const artifacts = make_move.makeMove(pos, move);
 

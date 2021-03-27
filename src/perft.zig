@@ -30,6 +30,13 @@ pub const PerftResults = struct {
 // Run a perft analysis of the position to the given depth. This function is
 // based on the C code at https://chessprogramming.wikispaces.com/Perft
 pub fn perft(pos: *position.Position, depth: u64) u64 {
+    // Generate all moves for the position.
+    var gen = MoveGenerator.init();
+
+    return perftRec(pos, &gen, depth);
+}
+
+pub fn perftRec(pos: *position.Position, gen: *MoveGenerator, depth: u64) u64 {
     var nodes: u64 = 0;
 
     // If the end of the tree is reached, increment the number of nodes found.
@@ -38,13 +45,12 @@ pub fn perft(pos: *position.Position, depth: u64) u64 {
     }
 
     // Generate all moves for the position.
-    var moves = MoveGenerator.init();
-    moves.generate(pos);
+    gen.generate(pos);
 
     // Make each move and recurse
-    while (moves.next()) |move| {
+    while (gen.next()) |move| {
         const artifacts = make_move.makeMove(pos, move);
-        nodes += perft(pos, depth - 1);
+        nodes += perftRec(pos, gen, depth - 1);
         make_move.unmakeMove(pos, move, artifacts);
     }
 
