@@ -3,7 +3,6 @@ const Color = @import("./color.zig").Color;
 const position = @import("./position.zig");
 usingnamespace @import("./bitboard_ops.zig");
 const std = @import("std");
-const bitboard = @import("./bitboard.zig");
 
 // These constants specify the value, in centipawns, of each piece when evaluating a position.
 // A piece's value is a combination of its base weight and a modifier based on its position on the board. This reflects more subtle information about a position. For example, a knight in the centre of the board is more effective than one on the side, so it recieves a bonus.
@@ -102,8 +101,11 @@ pub fn evaluate(pos: *position.Position) i64 {
     var score: i64 = 0;
 
     for (ALL_PIECE_TYPES) |piece_type| {
-        score += evaluate_bitboard(pos, piece_type, .white);
-        score -= evaluate_bitboard(pos, piece_type, .black);
+        const white = pos.board.get(piece_type, Color.white);
+        const black = flipV(pos.board.get(piece_type, Color.black));
+
+        score += evaluate_bitboard(white, piece_type);
+        score -= evaluate_bitboard(black, piece_type);
     }
 
     return score * switch (pos.to_move) {
@@ -112,16 +114,14 @@ pub fn evaluate(pos: *position.Position) i64 {
     };
 }
 
-fn evaluate_bitboard(pos: *position.Position, piece_type: PieceType, color: Color) i64 {
+// Evaluate a position for a certain piece type
+// Assumes that the bitboard passed in is for white
+fn evaluate_bitboard(bitboard: u64, piece_type: PieceType) i64 {
     var score: i64 = 0;
-    var scan_board = pos.board.get(piece_type, color);
+    var scan_board = bitboard;
 
     while (scan_board != 0) {
         var index = bitscanForwardAndReset(&scan_board);
-
-        if (color == Color.black) {
-            index = invertIndex(index);
-        }
 
         score += PIECE_WEIGHTS[@enumToInt(piece_type) - 2] + POSITION_WEIGHTS[@enumToInt(piece_type) - 2][index];
     }

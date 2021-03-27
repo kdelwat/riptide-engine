@@ -86,3 +86,10 @@ pub inline fn bitboardFromIndex(index: u8) u64 {
 pub fn isOnRank(bitboard_index: u8, rank_index: u8) bool {
     return bitboard_index >= (rank_index * 8) and bitboard_index <= (rank_index * 8 + 7);
 }
+
+// Flip a bitboard vertically (invert ranks)
+// On supported architectures the @byteSwap builtin will use the intrinsic
+// endian conversion instructions
+pub inline fn flipV(b: u64) u64 {
+    return @byteSwap(u64, b);
+}
