@@ -13,13 +13,12 @@ pub fn build(b: *Builder) void {
 
     const exe = b.addExecutable("riptide", "src/main.zig");
 
-    exe.addPackage(.{
-        .name = "mecha",
-        .path = "libs/mecha/mecha.zig",
-    });
+    exe.addPackagePath("mecha", "libs/mecha/mecha.zig");
 
     exe.setTarget(target);
     exe.setBuildMode(mode);
+    exe.use_stage1 = true;
+
     exe.install();
 
     const run_cmd = exe.run();
@@ -44,26 +43,20 @@ pub fn build(b: *Builder) void {
 
     for (test_files) |test_file| {
         const test_target = b.addTest(test_file);
-        test_target.addPackage(.{
-            .name = "mecha",
-            .path = "libs/mecha/mecha.zig",
-        });
+        test_target.use_stage1 = true;
+        test_target.addPackagePath("mecha", "libs/mecha/mecha.zig");
         test_step.dependOn(&test_target.step);
     }
 
     const perft_test_target = b.addTest("src/perft_test.zig");
-    perft_test_target.addPackage(.{
-        .name = "mecha",
-        .path = "libs/mecha/mecha.zig",
-    });
+    perft_test_target.use_stage1 = true;
+    perft_test_target.addPackagePath("mecha", "libs/mecha/mecha.zig");
     const perft_test_step = b.step("perft", "Run perft move generation tests (slow)");
     perft_test_step.dependOn(&perft_test_target.step);
 
     const nps_test_target = b.addTest("src/nps_test.zig");
-    nps_test_target.addPackage(.{
-        .name = "mecha",
-        .path = "libs/mecha/mecha.zig",
-    });
+    nps_test_target.use_stage1 = true;
+    nps_test_target.addPackagePath("mecha", "libs/mecha/mecha.zig");
     const nps_test_step = b.step("nps", "Run nodes per second benchmark");
     nps_test_step.dependOn(&nps_test_target.step);
 }

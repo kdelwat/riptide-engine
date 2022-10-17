@@ -9,20 +9,20 @@ const bitboardIndex = @import("./bitboard.zig").bitboardIndex;
 const CanCastle = @import("./castling.zig").CanCastle;
 const attack = @import("./attack.zig");
 const Allocator = std.mem.Allocator;
-usingnamespace @import("./bitboard_ops.zig");
+const b = @import("./bitboard_ops.zig");
 
 // Position contains the complete game state after a turn.
 pub const Position = struct {
-    board:              Bitboard,
+    board: Bitboard,
 
     // To improve move generation speed, cache the positions of each king
     // Indexed by Color
-    king_indices:       [2]u8,
+    king_indices: [2]u8,
 
     // to_move is the color of the player who is next to move.
-    to_move:            Color,
+    to_move: Color,
 
-    castling:           u4,
+    castling: u4,
 
     // en_passant_target is the index of a square where there is an en passant
     // opportunity. If a pawn was double pushed in the previous turn, its jumped
@@ -30,8 +30,8 @@ pub const Position = struct {
     en_passant_target: u8,
 
     // halfmove and fullmove represent the time elapsed in the game.
-    halfmove:        u64,
-    fullmove:        u64,
+    halfmove: u64,
+    fullmove: u64,
 
     // Equality with another position
     pub fn eq(self: Position, other: Position) bool {
@@ -48,21 +48,21 @@ pub const Position = struct {
 
     pub fn cmpDebug(self: Position, other: Position) void {
         std.debug.print("=== FINDING MISMATCHES BETWEEN SELF AND OTHER ===\n", .{});
-        if (self.board.boards[0] != other.board.boards[0]) std.debug.print("\t[white] want: {b}, got: {b}\n", .{self.board.boards[0], other.board.boards[0]});
-        if (self.board.boards[1] != other.board.boards[1]) std.debug.print("\t[black] want: {b}, got: {b}\n", .{self.board.boards[1], other.board.boards[1]});
-        if (self.board.boards[2] != other.board.boards[2]) std.debug.print("\t[pawn] want: {b}, got: {b}\n", .{self.board.boards[2], other.board.boards[2]});
-        if (self.board.boards[3] != other.board.boards[3]) std.debug.print("\t[knight] want: {b}, got: {b}\n", .{self.board.boards[3], other.board.boards[3]});
-        if (self.board.boards[4] != other.board.boards[4]) std.debug.print("\t[bishop] want: {b}, got: {b}\n", .{self.board.boards[4], other.board.boards[4]});
-        if (self.board.boards[5] != other.board.boards[5]) std.debug.print("\t[rook] want: {b}, got: {b}\n", .{self.board.boards[5], other.board.boards[5]});
-        if (self.board.boards[6] != other.board.boards[6]) std.debug.print("\t[queen] want: {b}, got: {b}\n", .{self.board.boards[6], other.board.boards[6]});
-        if (self.board.boards[7] != other.board.boards[7]) std.debug.print("\t[king] want: {b}, got: {b}\n", .{self.board.boards[7], other.board.boards[7]});
-        if (self.king_indices[0] != other.king_indices[0]) std.debug.print("\t[white king] want: {}, got: {}\n", .{self.king_indices[0], other.king_indices[0]});
-        if (self.king_indices[1] != other.king_indices[1]) std.debug.print("\t[black king] want: {}, got: {}\n", .{self.king_indices[1], other.king_indices[1]});
-        if (self.to_move != other.to_move) std.debug.print("\t[to_move] want: {}, got: {}\n", .{self.to_move, other.to_move});
-        if (self.castling != other.castling) std.debug.print("\t[castling] want: {b}, got: {b}\n", .{self.castling, other.castling});
-        if (self.en_passant_target != other.en_passant_target) std.debug.print("\t[en passant] want: {}, got: {}\n", .{self.en_passant_target, other.en_passant_target});
-        if (self.halfmove != other.halfmove) std.debug.print("\t[halfmove] want: {}, got: {}\n", .{self.halfmove, other.halfmove});
-        if (self.fullmove != other.fullmove) std.debug.print("\t[fullmove] want: {}, got: {}\n", .{self.fullmove, other.fullmove});
+        if (self.board.boards[0] != other.board.boards[0]) std.debug.print("\t[white] want: {b}, got: {b}\n", .{ self.board.boards[0], other.board.boards[0] });
+        if (self.board.boards[1] != other.board.boards[1]) std.debug.print("\t[black] want: {b}, got: {b}\n", .{ self.board.boards[1], other.board.boards[1] });
+        if (self.board.boards[2] != other.board.boards[2]) std.debug.print("\t[pawn] want: {b}, got: {b}\n", .{ self.board.boards[2], other.board.boards[2] });
+        if (self.board.boards[3] != other.board.boards[3]) std.debug.print("\t[knight] want: {b}, got: {b}\n", .{ self.board.boards[3], other.board.boards[3] });
+        if (self.board.boards[4] != other.board.boards[4]) std.debug.print("\t[bishop] want: {b}, got: {b}\n", .{ self.board.boards[4], other.board.boards[4] });
+        if (self.board.boards[5] != other.board.boards[5]) std.debug.print("\t[rook] want: {b}, got: {b}\n", .{ self.board.boards[5], other.board.boards[5] });
+        if (self.board.boards[6] != other.board.boards[6]) std.debug.print("\t[queen] want: {b}, got: {b}\n", .{ self.board.boards[6], other.board.boards[6] });
+        if (self.board.boards[7] != other.board.boards[7]) std.debug.print("\t[king] want: {b}, got: {b}\n", .{ self.board.boards[7], other.board.boards[7] });
+        if (self.king_indices[0] != other.king_indices[0]) std.debug.print("\t[white king] want: {}, got: {}\n", .{ self.king_indices[0], other.king_indices[0] });
+        if (self.king_indices[1] != other.king_indices[1]) std.debug.print("\t[black king] want: {}, got: {}\n", .{ self.king_indices[1], other.king_indices[1] });
+        if (self.to_move != other.to_move) std.debug.print("\t[to_move] want: {}, got: {}\n", .{ self.to_move, other.to_move });
+        if (self.castling != other.castling) std.debug.print("\t[castling] want: {b}, got: {b}\n", .{ self.castling, other.castling });
+        if (self.en_passant_target != other.en_passant_target) std.debug.print("\t[en passant] want: {}, got: {}\n", .{ self.en_passant_target, other.en_passant_target });
+        if (self.halfmove != other.halfmove) std.debug.print("\t[halfmove] want: {}, got: {}\n", .{ self.halfmove, other.halfmove });
+        if (self.fullmove != other.fullmove) std.debug.print("\t[fullmove] want: {}, got: {}\n", .{ self.fullmove, other.fullmove });
 
         std.debug.print("=== COMPARISON COMPLETE ===\n", .{});
     }
@@ -87,13 +87,13 @@ pub const Position = struct {
     }
     // Checks if there is a piece at the given index
     pub fn pieceOn(self: Position, i: u8) bool {
-        return self.board.occupied() & bitboardFromIndex(i) != 0;
+        return self.board.occupied() & b.bitboardFromIndex(i) != 0;
     }
 };
 
 // Create a new Position from a FEN string
 // The allocator is used by mecha internally for the parsing
-pub fn fromFEN(fen: []const u8, a: *Allocator) !Position {
+pub fn fromFEN(fen: []const u8, a: Allocator) !Position {
     const f: Fen = (try parse_fen(a, fen)).value;
     return fromFENStruct(f);
 }
@@ -104,7 +104,7 @@ pub fn fromFENStruct(fen: Fen) Position {
 
     var rank_index: u8 = 7;
     var file_index: u8 = 0;
-    var king_indices = [2]u8{0,0};
+    var king_indices = [2]u8{ 0, 0 };
     for (fen.board) |c| {
         // Skip the slashes which separate ranks
         if (c == '/') {
@@ -169,7 +169,7 @@ pub fn fromFENStruct(fen: Fen) Position {
 
 // Convert a FEN piece code (e.g. p) to the piece type
 fn pieceTypeFromFenCode(fen: u8) PieceType {
-    return switch(toLower(fen)) {
+    return switch (toLower(fen)) {
         'k' => PieceType.king,
         'q' => PieceType.queen,
         'b' => PieceType.bishop,

@@ -2,7 +2,7 @@ const std = @import("std");
 
 const PieceType = @import("./piece.zig").PieceType;
 const Color = @import("./color.zig").Color;
-usingnamespace @import("./bitboard_ops.zig");
+const b = @import("./bitboard_ops.zig");
 
 pub const Bitboard = struct {
     // Array of bitboards
@@ -18,7 +18,7 @@ pub const Bitboard = struct {
 
     pub fn init() Bitboard {
         return Bitboard{
-            .boards = [8]u64{0,0,0,0,0,0,0,0},
+            .boards = [8]u64{ 0, 0, 0, 0, 0, 0, 0, 0 },
         };
     }
 
@@ -31,7 +31,7 @@ pub const Bitboard = struct {
     }
 
     pub fn getPieceTypeAt(self: *Bitboard, index: u8) PieceType {
-        const mask = bitboardFromIndex(index);
+        const mask = b.bitboardFromIndex(index);
         if (self.boards[2] & mask != 0) return PieceType.pawn;
         if (self.boards[3] & mask != 0) return PieceType.knight;
         if (self.boards[4] & mask != 0) return PieceType.bishop;
@@ -43,20 +43,20 @@ pub const Bitboard = struct {
 
     // Ensure a bit is set to 1 for the given position
     pub fn setFR(self: *Bitboard, piece_type: PieceType, color: Color, file_index: u8, rank_index: u8) void {
-        const mask = bitboardFromIndex(bitboardIndex(file_index, rank_index));
+        const mask = b.bitboardFromIndex(bitboardIndex(file_index, rank_index));
         self.boards[@enumToInt(piece_type)] |= mask;
         self.boards[@enumToInt(color)] |= mask;
     }
 
     pub fn set(self: *Bitboard, piece_type: PieceType, color: Color, index: u8) void {
-        const mask = bitboardFromIndex(index);
+        const mask = b.bitboardFromIndex(index);
         self.boards[@enumToInt(piece_type)] |= mask;
         self.boards[@enumToInt(color)] |= mask;
     }
 
     // Ensure a bit is set to 0 for the given position
     pub fn unset(self: *Bitboard, piece_type: PieceType, color: Color, index: u8) void {
-        const mask = ~bitboardFromIndex(index);
+        const mask = ~b.bitboardFromIndex(index);
         self.boards[@enumToInt(piece_type)] &= mask;
         self.boards[@enumToInt(color)] &= mask;
     }

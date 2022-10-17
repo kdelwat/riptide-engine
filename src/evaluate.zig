@@ -1,7 +1,8 @@
 const PieceType = @import("./piece.zig").PieceType;
 const Color = @import("./color.zig").Color;
 const position = @import("./position.zig");
-usingnamespace @import("./bitboard_ops.zig");
+const b = @import("./bitboard_ops.zig");
+const bitboard = @import("./bitboard.zig");
 const std = @import("std");
 
 // These constants specify the value, in centipawns, of each piece when evaluating a position.
@@ -18,77 +19,63 @@ const PIECE_WEIGHTS = [6]i64{
 };
 
 // Same order as PIECE_WEIGHTS
-const POSITION_WEIGHTS = [6][64]i64{
-    [64]i64{
-        0, 0, 0, 0, 0, 0, 0, 0,
-        5, 10, 10, -20, -20, 10, 10, 5,
-        5, -5, -10, 0, 0, -10, -5, 5,
-        0, 0, 0, 20, 20, 0, 0, 0,
-        5, 5, 10, 25, 25, 10, 5, 5,
-        10, 10, 20, 30, 30, 20, 10, 10,
-        50, 50, 50, 50, 50, 50, 50, 50,
-        0, 0, 0, 0, 0, 0, 0, 0,
-    },
-    [64]i64{
-        -50, -40, -30, -30, -30, -30, -40, -50,
-        -40, -20, 0, 5, 5, 0, -20, -40,
-        -30, 5, 10, 15, 15, 10, 5, -30,
-        -30, 0, 15, 20, 20, 15, 0, -30,
-        -30, 5, 15, 20, 20, 15, 5, -30,
-        -30, 0, 10, 15, 15, 10, 0, -30,
-        -40, -20, 0, 0, 0, 0, -20, -40,
-        -50, -40, -30, -30, -30, -30, -40, -50,
-    },
-    [64]i64{
-        -20, -10, -10, -10, -10, -10, -10, -20,
-        -10, 5, 0, 0, 0, 0, 5, -10,
-        -10, 10, 10, 10, 10, 10, 10, -10,
-        -10, 0, 10, 10, 10, 10, 0, -10,
-        -10, 5, 5, 10, 10, 5, 5, -10,
-        -10, 0, 5, 10, 10, 5, 0, -10,
-        -10, 0, 0, 0, 0, 0, 0, -10,
-        -20, -10, -10, -10, -10, -10, -10, -20,
-    },
-    [64]i64{
-        0, 0, 0, 5, 5, 0, 0, 0,
-        -5, 0, 0, 0, 0, 0, 0, -5,
-        -5, 0, 0, 0, 0, 0, 0, -5,
-        -5, 0, 0, 0, 0, 0, 0, -5,
-        -5, 0, 0, 0, 0, 0, 0, -5,
-        -5, 0, 0, 0, 0, 0, 0, -5,
-        5, 10, 10, 10, 10, 10, 10, 5,
-        0, 0, 0, 0, 0, 0, 0, 0,
-    },
-    [64]i64{
-        -20, -10, -10, -5, -5, -10, -10, -20,
-        -10, 0, 5, 0, 0, 0, 0, -10,
-        -10, 5, 5, 5, 5, 5, 0, -10,
-        0, 0, 5, 5, 5, 5, 0, -5,
-        -5, 0, 5, 5, 5, 5, 0, -5,
-        -10, 0, 5, 5, 5, 5, 0, -10,
-        -10, 0, 0, 0, 0, 0, 0, -10,
-        -20, -10, -10, -5, -5, -10, -10, -20,
-    },
-    [64]i64{
-        20, 30, 10, 0, 0, 10, 30, 20,
-        20, 20, 0, 0, 0, 0, 20, 20,
-        -10, -20, -20, -20, -20, -20, -20, -10,
-        -20, -30, -30, -40, -40, -30, -30, -20,
-        -30, -40, -40, -50, -50, -40, -40, -30,
-        -30, -40, -40, -50, -50, -40, -40, -30,
-        -30, -40, -40, -50, -50, -40, -40, -30,
-        -30, -40, -40, -50, -50, -40, -40, -30,
-    }
-};
+const POSITION_WEIGHTS = [6][64]i64{ [64]i64{
+    0,  0,  0,   0,   0,   0,   0,  0,
+    5,  10, 10,  -20, -20, 10,  10, 5,
+    5,  -5, -10, 0,   0,   -10, -5, 5,
+    0,  0,  0,   20,  20,  0,   0,  0,
+    5,  5,  10,  25,  25,  10,  5,  5,
+    10, 10, 20,  30,  30,  20,  10, 10,
+    50, 50, 50,  50,  50,  50,  50, 50,
+    0,  0,  0,   0,   0,   0,   0,  0,
+}, [64]i64{
+    -50, -40, -30, -30, -30, -30, -40, -50,
+    -40, -20, 0,   5,   5,   0,   -20, -40,
+    -30, 5,   10,  15,  15,  10,  5,   -30,
+    -30, 0,   15,  20,  20,  15,  0,   -30,
+    -30, 5,   15,  20,  20,  15,  5,   -30,
+    -30, 0,   10,  15,  15,  10,  0,   -30,
+    -40, -20, 0,   0,   0,   0,   -20, -40,
+    -50, -40, -30, -30, -30, -30, -40, -50,
+}, [64]i64{
+    -20, -10, -10, -10, -10, -10, -10, -20,
+    -10, 5,   0,   0,   0,   0,   5,   -10,
+    -10, 10,  10,  10,  10,  10,  10,  -10,
+    -10, 0,   10,  10,  10,  10,  0,   -10,
+    -10, 5,   5,   10,  10,  5,   5,   -10,
+    -10, 0,   5,   10,  10,  5,   0,   -10,
+    -10, 0,   0,   0,   0,   0,   0,   -10,
+    -20, -10, -10, -10, -10, -10, -10, -20,
+}, [64]i64{
+    0,  0,  0,  5,  5,  0,  0,  0,
+    -5, 0,  0,  0,  0,  0,  0,  -5,
+    -5, 0,  0,  0,  0,  0,  0,  -5,
+    -5, 0,  0,  0,  0,  0,  0,  -5,
+    -5, 0,  0,  0,  0,  0,  0,  -5,
+    -5, 0,  0,  0,  0,  0,  0,  -5,
+    5,  10, 10, 10, 10, 10, 10, 5,
+    0,  0,  0,  0,  0,  0,  0,  0,
+}, [64]i64{
+    -20, -10, -10, -5, -5, -10, -10, -20,
+    -10, 0,   5,   0,  0,  0,   0,   -10,
+    -10, 5,   5,   5,  5,  5,   0,   -10,
+    0,   0,   5,   5,  5,  5,   0,   -5,
+    -5,  0,   5,   5,  5,  5,   0,   -5,
+    -10, 0,   5,   5,  5,  5,   0,   -10,
+    -10, 0,   0,   0,  0,  0,   0,   -10,
+    -20, -10, -10, -5, -5, -10, -10, -20,
+}, [64]i64{
+    20,  30,  10,  0,   0,   10,  30,  20,
+    20,  20,  0,   0,   0,   0,   20,  20,
+    -10, -20, -20, -20, -20, -20, -20, -10,
+    -20, -30, -30, -40, -40, -30, -30, -20,
+    -30, -40, -40, -50, -50, -40, -40, -30,
+    -30, -40, -40, -50, -50, -40, -40, -30,
+    -30, -40, -40, -50, -50, -40, -40, -30,
+    -30, -40, -40, -50, -50, -40, -40, -30,
+} };
 
-const ALL_PIECE_TYPES = [6]PieceType{
-    .pawn,
-    .knight,
-    .bishop,
-    .rook,
-    .queen,
-    .king
-};
+const ALL_PIECE_TYPES = [6]PieceType{ .pawn, .knight, .bishop, .rook, .queen, .king };
 
 // evaluate returns an objective score representing the game's current result. A
 // game starts at 0, with no player having the advantage. As it progresses, if
@@ -102,7 +89,7 @@ pub fn evaluate(pos: *position.Position) i64 {
 
     for (ALL_PIECE_TYPES) |piece_type| {
         const white = pos.board.get(piece_type, Color.white);
-        const black = flipV(pos.board.get(piece_type, Color.black));
+        const black = b.flipV(pos.board.get(piece_type, Color.black));
 
         score += evaluate_bitboard(white, piece_type);
         score -= evaluate_bitboard(black, piece_type);
@@ -116,12 +103,12 @@ pub fn evaluate(pos: *position.Position) i64 {
 
 // Evaluate a position for a certain piece type
 // Assumes that the bitboard passed in is for white
-fn evaluate_bitboard(bitboard: u64, piece_type: PieceType) i64 {
+fn evaluate_bitboard(bb: u64, piece_type: PieceType) i64 {
     var score: i64 = 0;
-    var scan_board = bitboard;
+    var scan_board = bb;
 
     while (scan_board != 0) {
-        var index = bitscanForwardAndReset(&scan_board);
+        var index = b.bitscanForwardAndReset(&scan_board);
 
         score += PIECE_WEIGHTS[@enumToInt(piece_type) - 2] + POSITION_WEIGHTS[@enumToInt(piece_type) - 2][index];
     }

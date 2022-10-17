@@ -23,10 +23,30 @@ Currently, the following UCI features are unimplemented:
 
 ## Installation
 
-1. Install [Zig](https://ziglang.org/) version 0.7.1.
+1. Install [Zig](https://ziglang.org/) from the `master` branch (0.10.\* development version).
 2. Clone the repository with `git clone --recurse-submodules https://github.com/kdelwat/riptide-engine.git`
 3. Run `cd riptide-engine && zig build`
 4. The `riptide` binary will be created in `zig-cache/bin`; point your GUI client to this binary.
+
+## Tests
+
+Run unit tests with:
+
+```
+zig build test
+```
+
+Run [perft](https://www.chessprogramming.org/Perft) correctness tests with:
+
+```
+zig build perft
+```
+
+Run node-per-second benchmarks with:
+
+```
+zig build nps
+```
 
 ## Credits
 

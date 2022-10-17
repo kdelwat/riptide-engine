@@ -75,7 +75,7 @@ fn nextLine(reader: anytype, buffer: []u8) !?[]const u8 {
         '\n',
     )) orelse return null;
 
-    if (std.builtin.Target.current.os.tag == .windows) {
+    if (@import("builtin").os.tag == .windows) {
         line = std.mem.trimRight(u8, line[0..], "\r");
     }
 
@@ -86,7 +86,7 @@ pub fn main() anyerror!void {
     // Get file descriptors for IO
     const stdin = std.io.getStdIn();
 
-    const logfile_path: []const u8 = if (builtin.os.tag == std.Target.Os.Tag.windows) "C:/Users/cadel/Documents/Chess/riptide/riptide_logs.txt" else "/mnt/c/Users/cadel/Documents/Chess/riptide/riptide_logs.txt";
+    const logfile_path: []const u8 = "/mnt/ext/riptide_logs.txt";
 
     const logfile = try std.fs.createFileAbsolute(
         logfile_path,
@@ -118,11 +118,11 @@ pub fn main() anyerror!void {
             quit = true;
         }
 
-        quit = try handleCommand(input, logger, &gpa.allocator);
+        quit = try handleCommand(input, logger, gpa.allocator());
     }
 }
 
-fn handleCommand(input: []const u8, logger: Logger, a: *Allocator) !bool {
+fn handleCommand(input: []const u8, logger: Logger, a: Allocator) !bool {
     const c: uci.UciCommand = (try parse_uci(a, input)).value;
 
     try switch (c) {
@@ -143,45 +143,38 @@ fn handleCommand(input: []const u8, logger: Logger, a: *Allocator) !bool {
             try logger.outgoing("readyok", .{});
         },
 
-        UciCommandType.position_startpos => |moves| {
+        UciCommandType.position_startpos => |_| {
             startNewGame(start_position, a);
         },
 
-        UciCommandType.ucinewgame =>
-            startNewGame(start_position, a),
+        UciCommandType.ucinewgame => startNewGame(start_position, a),
 
         UciCommandType.position => |pos| {
             engine_data = GlobalData{
-               .pos = position.fromFENStruct(pos.fen),
-               .best_move = null,
+                .pos = position.fromFENStruct(pos.fen),
+                .best_move = null,
             };
         },
 
-        UciCommandType.debug => |enabled|
-            debug_mode = enabled,
-        UciCommandType.setoption => |opt|
-            return false,
-        UciCommandType.quit =>
-            return true,
-        UciCommandType.ponderhit =>
-            return false,
-        UciCommandType.go => |options|
-            startAnalysis(options, logger, a),
-        UciCommandType.stop =>
-            stopAnalysis(logger),
+        UciCommandType.debug => |enabled| debug_mode = enabled,
+        UciCommandType.setoption => |_| return false,
+        UciCommandType.quit => return true,
+        UciCommandType.ponderhit => return false,
+        UciCommandType.go => |options| startAnalysis(options, logger, a),
+        UciCommandType.stop => stopAnalysis(logger),
     };
 
     return false;
 }
 
-fn startNewGame(pos: []const u8, a: *Allocator) void {
+fn startNewGame(_: []const u8, a: Allocator) void {
     engine_data = GlobalData{
-       .pos = position.fromFEN(start_position, a) catch unreachable,
-       .best_move = null,
+        .pos = position.fromFEN(start_position, a) catch unreachable,
+        .best_move = null,
     };
 }
 
-fn startAnalysis(options: []GoOption, logger: Logger, a: *Allocator) !void {
+fn startAnalysis(options: []GoOption, logger: Logger, a: Allocator) !void {
     var default_search_moves: []const algebraic.LongAlgebraicMove = ([_]algebraic.LongAlgebraicMove{})[0..];
     var opts: AnalysisOptions = .{
         .search_mode = SearchMode.infinite,
@@ -200,62 +193,49 @@ fn startAnalysis(options: []GoOption, logger: Logger, a: *Allocator) !void {
 
     for (options) |option| {
         switch (option) {
-            GoOptionType.infinite =>
-                opts.search_mode = SearchMode.infinite,
+            GoOptionType.infinite => opts.search_mode = SearchMode.infinite,
 
-            GoOptionType.ponder =>
-                opts.search_mode = SearchMode.ponder,
+            GoOptionType.ponder => opts.search_mode = SearchMode.ponder,
 
-            GoOptionType.nodes => |nodes|
-                {
-                    opts.search_mode = SearchMode.nodes;
-                    opts.nodes = nodes;
-                },
+            GoOptionType.nodes => |nodes| {
+                opts.search_mode = SearchMode.nodes;
+                opts.nodes = nodes;
+            },
 
-            GoOptionType.depth => |depth|
-                {
-                    opts.search_mode = SearchMode.depth;
-                    opts.depth = depth;
-                },
+            GoOptionType.depth => |depth| {
+                opts.search_mode = SearchMode.depth;
+                opts.depth = depth;
+            },
 
-            GoOptionType.mate => |mate|
-                {
-                    opts.search_mode = SearchMode.mate;
-                    opts.moves_to_mate = mate;
-                },
+            GoOptionType.mate => |mate| {
+                opts.search_mode = SearchMode.mate;
+                opts.moves_to_mate = mate;
+            },
 
-            GoOptionType.movetime => |movetime|
-                {
-                    opts.search_mode = SearchMode.movetime;
-                    opts.movetime = movetime;
-                },
+            GoOptionType.movetime => |movetime| {
+                opts.search_mode = SearchMode.movetime;
+                opts.movetime = movetime;
+            },
 
-            GoOptionType.wtime => |wtime|
-                opts.wtime = wtime,
+            GoOptionType.wtime => |wtime| opts.wtime = wtime,
 
-            GoOptionType.btime => |btime|
-                opts.btime = btime,
-                
-            GoOptionType.winc => |winc|
-                opts.winc = winc,
-                
-            GoOptionType.binc => |binc|
-                opts.binc = binc,
+            GoOptionType.btime => |btime| opts.btime = btime,
 
-            GoOptionType.movestogo => |movestogo|
-                opts.movestogo = movestogo,
+            GoOptionType.winc => |winc| opts.winc = winc,
 
-            GoOptionType.searchmoves => |searchmoves|
-                opts.search_moves = searchmoves,
+            GoOptionType.binc => |binc| opts.binc = binc,
+
+            GoOptionType.movestogo => |movestogo| opts.movestogo = movestogo,
+
+            GoOptionType.searchmoves => |searchmoves| opts.search_moves = searchmoves,
         }
 
-        switch(opts.search_mode) {
-            SearchMode.depth =>
-                {
-                    var should_cancel: bool = false;
-                    const best_move = search.search(&engine_data.pos, opts.depth, -100000, 100000, search.SearchContext{.a = a, .cancelled = &should_cancel, .logger = logger});
-                    try sendBestMove(best_move, logger);
-                },
+        switch (opts.search_mode) {
+            SearchMode.depth => {
+                var should_cancel: bool = false;
+                const best_move = search.search(&engine_data.pos, opts.depth, -100000, 100000, search.SearchContext{ .a = a, .cancelled = &should_cancel, .logger = logger });
+                try sendBestMove(best_move, logger);
+            },
             SearchMode.mate => {},
             SearchMode.ponder => {},
             SearchMode.movetime => {
@@ -282,7 +262,7 @@ fn stopAnalysis(logger: Logger) !void {
 
 fn sendBestMove(opt_m: ?Move, logger: Logger) !void {
     if (opt_m) |m| {
-        var buf: [5]u8 = [_]u8{0,0,0,0,0};
+        var buf: [5]u8 = [_]u8{ 0, 0, 0, 0, 0 };
         try m.toLongAlgebraic(buf[0..]);
         if (buf[4] == 0) {
             try logger.outgoing("bestmove {s}", .{buf[0..4]});

@@ -16,32 +16,22 @@ const WorkerThreadStatus = enum {
 };
 
 var status: WorkerThreadStatus = WorkerThreadStatus.not_running;
-var thread: ?*std.Thread = null;
+var thread: ?std.Thread = null;
 
 // Used to signal to the search thread that it should exit
 var cancel_search: bool = false;
 
-const WorkerError = error {
+const WorkerError = error{
     WorkerAlreadyRunning,
 };
 
 // Spawn the worker thread, or return an error if it has already been started
-pub fn start(pos: *position.Position, best_move: *?Move, logger: Logger, a: *Allocator) !void {
+pub fn start(pos: *position.Position, best_move: *?Move, logger: Logger, a: Allocator) !void {
     if (status != WorkerThreadStatus.not_running) {
         return WorkerError.WorkerAlreadyRunning;
     }
 
-    const ctx = search.InfiniteSearchContext{
-        .pos = pos,
-        .best_move = best_move,
-        .thread_ctx = search.SearchContext{
-            .cancelled = &cancel_search,
-            .a = a,
-            .logger = logger,
-        },
-    };
-
-    thread = try std.Thread.spawn(ctx, search.searchInfinite);
+    thread = try std.Thread.spawn(.{}, search.searchInfinite, .{ pos, best_move, &cancel_search, a, logger });
 }
 
 // Stop the worker and block until it finishes
@@ -49,7 +39,7 @@ pub fn stop() !void {
     status = WorkerThreadStatus.closing;
     cancel_search = true;
     if (thread) |t| {
-        t.wait();
+        t.join();
         status = WorkerThreadStatus.not_running;
         cancel_search = false;
     }

@@ -6,20 +6,20 @@ const color = @import("./color.zig");
 const bitboard = @import("./bitboard.zig");
 
 pub const MoveType = enum(u4) {
-    quiet                = 0b0000,
-    double_pawn_push     = 0b0001,
-    kingside_castle      = 0b0010,
-    queenside_castle     = 0b0011,
-    capture              = 0b0100,
-    en_passant           = 0b0101,
-    knight_promo         = 0b1000,
-    bishop_promo         = 0b1001,
-    rook_promo           = 0b1010,
-    queen_promo          = 0b1011,
+    quiet = 0b0000,
+    double_pawn_push = 0b0001,
+    kingside_castle = 0b0010,
+    queenside_castle = 0b0011,
+    capture = 0b0100,
+    en_passant = 0b0101,
+    knight_promo = 0b1000,
+    bishop_promo = 0b1001,
+    rook_promo = 0b1010,
+    queen_promo = 0b1011,
     knight_promo_capture = 0b1100,
     bishop_promo_capture = 0b1101,
-    rook_promo_capture   = 0b1110,
-    queen_promo_capture  = 0b1111,
+    rook_promo_capture = 0b1110,
+    queen_promo_capture = 0b1111,
 };
 
 pub const Move = struct {
@@ -138,13 +138,13 @@ pub const Move = struct {
         return switch (self.move_type) {
             .knight_promo => PieceType.knight,
             .bishop_promo => PieceType.bishop,
-            .rook_promo   => PieceType.rook,
-            .queen_promo  => PieceType.queen,
+            .rook_promo => PieceType.rook,
+            .queen_promo => PieceType.queen,
 
             .knight_promo_capture => PieceType.knight,
             .bishop_promo_capture => PieceType.bishop,
-            .rook_promo_capture   => PieceType.rook,
-            .queen_promo_capture  => PieceType.queen,
+            .rook_promo_capture => PieceType.rook,
+            .queen_promo_capture => PieceType.queen,
 
             else => PieceType.empty,
         };
@@ -163,14 +163,14 @@ pub const Move = struct {
             _ = try std.fmt.bufPrint(
                 buf,
                 "{c}{c}{c}{c}{c}",
-                .{from_file, from_rank, to_file, to_rank, pieceToCharColorblind(promotion_piece)},
+                .{ from_file, from_rank, to_file, to_rank, pieceToCharColorblind(promotion_piece) },
             );
         }
 
         _ = try std.fmt.bufPrint(
             buf,
             "{c}{c}{c}{c}",
-            .{from_file, from_rank, to_file, to_rank},
+            .{ from_file, from_rank, to_file, to_rank },
         );
     }
 };

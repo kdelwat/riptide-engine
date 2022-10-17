@@ -2,14 +2,14 @@ const toUnion = @import("../to_union.zig").toUnion;
 const UciCommand = @import("../../uci.zig").UciCommand;
 const GoOption = @import("../../uci.zig").GoOption;
 const GoOptionType = @import("../../uci.zig").GoOptionType;
-usingnamespace @import("mecha");
+const m = @import("mecha");
 
-pub const p_go = map(UciCommand, toUnion("go", UciCommand), combine(.{string("go "), go}));
+pub const p_go = m.map(UciCommand, toUnion("go", UciCommand), m.combine(.{ m.string("go "), go }));
 
-const go = many(combine(.{option, discard(opt(utf8.char(' ')))}), .{});
+const go = m.many(m.combine(.{ option, m.discard(m.opt(m.utf8.char(' '))) }), .{});
 const algebraic = @import("../algebraic.zig");
 
-const option = oneOf(.{
+const option = m.oneOf(.{
     option_infinite,
     option_ponder,
     option_wtime,
@@ -24,15 +24,15 @@ const option = oneOf(.{
     option_searchmoves,
 });
 
-const option_infinite = map(GoOption, toUnion("infinite", GoOption), string("infinite"));
-const option_ponder = map(GoOption, toUnion("ponder", GoOption), string("ponder"));
-const option_wtime = map(GoOption, toUnion("wtime", GoOption), combine(.{string("wtime "), int(u64, 10)}));
-const option_btime = map(GoOption, toUnion("btime", GoOption), combine(.{string("btime "), int(u64, 10)}));
-const option_winc = map(GoOption, toUnion("winc", GoOption), combine(.{string("winc "), int(u64, 10)}));
-const option_binc = map(GoOption, toUnion("binc", GoOption), combine(.{string("binc "), int(u64, 10)}));
-const option_movestogo = map(GoOption, toUnion("movestogo", GoOption), combine(.{string("movestogo "), int(u64, 10)}));
-const option_depth = map(GoOption, toUnion("depth", GoOption), combine(.{string("depth "), int(u64, 10)}));
-const option_nodes = map(GoOption, toUnion("nodes", GoOption), combine(.{string("nodes "), int(u64, 10)}));
-const option_mate = map(GoOption, toUnion("mate", GoOption), combine(.{string("mate "), int(u64, 10)}));
-const option_movetime = map(GoOption, toUnion("movetime", GoOption), combine(.{string("movetime "), int(u64, 10)}));
-const option_searchmoves = map(GoOption, toUnion("searchmoves", GoOption), combine(.{string("searchmoves "), many(algebraic.long_algebraic_notation, .{.collect = true})}));
+const option_infinite = m.map(GoOption, toUnion("infinite", GoOption), m.string("infinite"));
+const option_ponder = m.map(GoOption, toUnion("ponder", GoOption), m.string("ponder"));
+const option_wtime = m.map(GoOption, toUnion("wtime", GoOption), m.combine(.{ m.string("wtime "), m.int(u64, .{ .base = 10 }) }));
+const option_btime = m.map(GoOption, toUnion("btime", GoOption), m.combine(.{ m.string("btime "), m.int(u64, .{ .base = 10 }) }));
+const option_winc = m.map(GoOption, toUnion("winc", GoOption), m.combine(.{ m.string("winc "), m.int(u64, .{ .base = 10 }) }));
+const option_binc = m.map(GoOption, toUnion("binc", GoOption), m.combine(.{ m.string("binc "), m.int(u64, .{ .base = 10 }) }));
+const option_movestogo = m.map(GoOption, toUnion("movestogo", GoOption), m.combine(.{ m.string("movestogo "), m.int(u64, .{ .base = 10 }) }));
+const option_depth = m.map(GoOption, toUnion("depth", GoOption), m.combine(.{ m.string("depth "), m.int(u64, .{ .base = 10 }) }));
+const option_nodes = m.map(GoOption, toUnion("nodes", GoOption), m.combine(.{ m.string("nodes "), m.int(u64, .{ .base = 10 }) }));
+const option_mate = m.map(GoOption, toUnion("mate", GoOption), m.combine(.{ m.string("mate "), m.int(u64, .{ .base = 10 }) }));
+const option_movetime = m.map(GoOption, toUnion("movetime", GoOption), m.combine(.{ m.string("movetime "), m.int(u64, .{ .base = 10 }) }));
+const option_searchmoves = m.map(GoOption, toUnion("searchmoves", GoOption), m.combine(.{ m.string("searchmoves "), m.many(algebraic.long_algebraic_notation, .{ .collect = true }) }));

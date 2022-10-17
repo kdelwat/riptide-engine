@@ -7,8 +7,8 @@ const PieceType = piece.PieceType;
 
 test "toLongAlgebraic" {
     const m = Move.initQuiet(8, 24, Color.white, PieceType.pawn);
-    var buf: [4]u8 = [_]u8{0,0,0,0};
+    var buf: [4]u8 = [_]u8{ 0, 0, 0, 0 };
 
     m.toLongAlgebraic(buf[0..]) catch unreachable;
-    expectEqualStrings("a2a4", buf[0..]);
+    try expectEqualStrings("a2a4", buf[0..]);
 }

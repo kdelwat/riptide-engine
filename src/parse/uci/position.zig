@@ -3,27 +3,9 @@ const UciCommand = @import("../../uci.zig").UciCommand;
 const UciCommandPosition = @import("../../uci.zig").UciCommandPosition;
 const fen = @import("../fen.zig").fen;
 const algebraic = @import("../algebraic.zig");
-usingnamespace @import("mecha");
+const m = @import("mecha");
+const utf8 = m.utf8;
 
-pub const p_position = map(
-    UciCommand,
-    toUnion("position", UciCommand),
-    combine(.{
-        string("position fen "),
-        map(UciCommandPosition, toStruct(UciCommandPosition), combine(.{
-            fen,
-            discard(opt(utf8.char(' '))),
-            many(algebraic.long_algebraic_notation, .{.collect = true})
-        }))
-    })
-);
+pub const p_position = m.map(UciCommand, toUnion("position", UciCommand), m.combine(.{ m.string("position fen "), m.map(UciCommandPosition, m.toStruct(UciCommandPosition), m.combine(.{ fen, m.discard(m.opt(m.utf8.char(' '))), m.many(algebraic.long_algebraic_notation, .{ .collect = true }) })) }));
 
-pub const p_position_startpos = map(
-    UciCommand,
-    toUnion("position_startpos", UciCommand),
-    combine(.{
-        string("position startpos"),
-        discard(opt(utf8.char(' '))),
-        many(algebraic.long_algebraic_notation, .{.collect = true})
-    })
-);
+pub const p_position_startpos = m.map(UciCommand, toUnion("position_startpos", UciCommand), m.combine(.{ m.string("position startpos"), m.discard(m.opt(utf8.char(' '))), m.many(algebraic.long_algebraic_notation, .{ .collect = true }) }));

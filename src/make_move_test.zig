@@ -23,11 +23,11 @@ test "Quiet move" {
 
     const artifacts = make_move.makeMove(&starting_pos, m);
 
-    std.testing.expectEqualSlices(u64, starting_pos.board.boards[0..], expected_pos.board.boards[0..]);
-    expect(starting_pos.eq(expected_pos));
+    try std.testing.expectEqualSlices(u64, starting_pos.board.boards[0..], expected_pos.board.boards[0..]);
+    try expect(starting_pos.eq(expected_pos));
 
     make_move.unmakeMove(&starting_pos, m, artifacts);
-    expect(starting_pos.eq(starting_pos_saved));
+    try expect(starting_pos.eq(starting_pos_saved));
 }
 
 test "Capture" {
@@ -37,14 +37,14 @@ test "Capture" {
     const expected_pos = fromFEN("rnbqkb1r/pppp1ppp/8/1B2p3/4n3/8/PPPP1PPP/RNBQK1NR w KQkq - 0 4") catch unreachable;
 
     const m = Move.initCapture(45, 28, Color.black, PieceType.knight, PieceType.pawn);
-    expect(m.is(MoveType.capture));
+    try expect(m.is(MoveType.capture));
 
     const artifacts = make_move.makeMove(&starting_pos, m);
-    expect(starting_pos.eq(expected_pos));
+    try expect(starting_pos.eq(expected_pos));
 
     make_move.unmakeMove(&starting_pos, m, artifacts);
 
-    expect(starting_pos.eq(starting_pos_saved));
+    try expect(starting_pos.eq(starting_pos_saved));
 }
 
 test "Double pawn push" {
@@ -57,10 +57,10 @@ test "Double pawn push" {
 
     const artifacts = make_move.makeMove(&starting_pos, m);
 
-    expect(starting_pos.eq(expected_pos));
+    try expect(starting_pos.eq(expected_pos));
 
     make_move.unmakeMove(&starting_pos, m, artifacts);
-    expect(starting_pos.eq(starting_pos_saved));
+    try expect(starting_pos.eq(starting_pos_saved));
 }
 
 test "Promotion" {
@@ -73,10 +73,10 @@ test "Promotion" {
 
     const artifacts = make_move.makeMove(&starting_pos, m);
 
-    expect(starting_pos.eq(expected_pos));
+    try expect(starting_pos.eq(expected_pos));
 
     make_move.unmakeMove(&starting_pos, m, artifacts);
-    expect(starting_pos.eq(starting_pos_saved));
+    try expect(starting_pos.eq(starting_pos_saved));
 }
 
 test "En passant capture" {
@@ -89,12 +89,11 @@ test "En passant capture" {
 
     const artifacts = make_move.makeMove(&starting_pos, m);
 
-    expect(starting_pos.eq(expected_pos));
+    try expect(starting_pos.eq(expected_pos));
 
     make_move.unmakeMove(&starting_pos, m, artifacts);
-    expect(starting_pos.eq(starting_pos_saved));
+    try expect(starting_pos.eq(starting_pos_saved));
 }
-
 
 test "Promotion capture" {
     var starting_pos = fromFEN("rnbqkbnr/pP4pp/5p2/3pp3/4P3/8/PPP2PPP/RNBQKBNR w KQkq - 0 6") catch unreachable;
@@ -106,12 +105,11 @@ test "Promotion capture" {
 
     const artifacts = make_move.makeMove(&starting_pos, m);
 
-    expect(starting_pos.eq(expected_pos));
+    try expect(starting_pos.eq(expected_pos));
 
     make_move.unmakeMove(&starting_pos, m, artifacts);
-    expect(starting_pos.eq(starting_pos_saved));
+    try expect(starting_pos.eq(starting_pos_saved));
 }
-
 
 test "Losing castle rights from king" {
     var starting_pos = fromFEN("rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2") catch unreachable;
@@ -123,12 +121,11 @@ test "Losing castle rights from king" {
 
     const artifacts = make_move.makeMove(&starting_pos, m);
 
-    expect(starting_pos.eq(expected_pos));
+    try expect(starting_pos.eq(expected_pos));
 
     make_move.unmakeMove(&starting_pos, m, artifacts);
-    expect(starting_pos.eq(starting_pos_saved));
+    try expect(starting_pos.eq(starting_pos_saved));
 }
-
 
 test "Losing castle rights from rook" {
     var starting_pos = fromFEN("rnbqkbnr/ppppppp1/7p/8/8/6PP/PPPPPP2/RNBQKBNR b KQkq - 0 2") catch unreachable;
@@ -140,12 +137,11 @@ test "Losing castle rights from rook" {
 
     const artifacts = make_move.makeMove(&starting_pos, m);
 
-    expect(starting_pos.eq(expected_pos));
+    try expect(starting_pos.eq(expected_pos));
 
     make_move.unmakeMove(&starting_pos, m, artifacts);
-    expect(starting_pos.eq(starting_pos_saved));
+    try expect(starting_pos.eq(starting_pos_saved));
 }
-
 
 test "Castle queenside" {
     var starting_pos = fromFEN("rnbqkb1r/ppp1pppp/8/3p2B1/3Pn3/2N5/PPPQPPPP/R3KBNR w KQkq - 2 5") catch unreachable;
@@ -157,12 +153,11 @@ test "Castle queenside" {
 
     const artifacts = make_move.makeMove(&starting_pos, m);
 
-    expect(starting_pos.eq(expected_pos));
+    try expect(starting_pos.eq(expected_pos));
 
     make_move.unmakeMove(&starting_pos, m, artifacts);
-    expect(starting_pos.eq(starting_pos_saved));
+    try expect(starting_pos.eq(starting_pos_saved));
 }
-
 
 test "Castle kingside" {
     var starting_pos = fromFEN("rnbqk2r/ppp2ppp/3bpB2/3p4/3PN3/8/PPPQPPPP/2KR1BNR b kq - 2 7") catch unreachable;
@@ -174,10 +169,10 @@ test "Castle kingside" {
 
     const artifacts = make_move.makeMove(&starting_pos, m);
 
-    expect(starting_pos.eq(expected_pos));
+    try expect(starting_pos.eq(expected_pos));
 
     make_move.unmakeMove(&starting_pos, m, artifacts);
-    expect(starting_pos.eq(starting_pos_saved));
+    try expect(starting_pos.eq(starting_pos_saved));
 }
 
 test "Bug: promotion" {
@@ -190,12 +185,11 @@ test "Bug: promotion" {
 
     const artifacts = make_move.makeMove(&starting_pos, m);
 
-    expect(starting_pos.eq(expected_pos));
+    try expect(starting_pos.eq(expected_pos));
 
     make_move.unmakeMove(&starting_pos, m, artifacts);
-    expect(starting_pos.eq(starting_pos_saved));
+    try expect(starting_pos.eq(starting_pos_saved));
 }
-
 
 test "Bug: king movement" {
     var starting_pos = fromFEN("8/8/8/8/k7/8/2Kp4/2R5 b - - 1 3") catch unreachable;
@@ -207,10 +201,10 @@ test "Bug: king movement" {
 
     const artifacts = make_move.makeMove(&starting_pos, m);
 
-    expect(starting_pos.eq(expected_pos));
+    try expect(starting_pos.eq(expected_pos));
 
     make_move.unmakeMove(&starting_pos, m, artifacts);
-    expect(starting_pos.eq(starting_pos_saved));
+    try expect(starting_pos.eq(starting_pos_saved));
 }
 
 test "Underpromotion capture" {
@@ -223,8 +217,8 @@ test "Underpromotion capture" {
 
     const artifacts = make_move.makeMove(&starting_pos, m);
 
-    expect(starting_pos.eq(expected_pos));
+    try expect(starting_pos.eq(expected_pos));
 
     make_move.unmakeMove(&starting_pos, m, artifacts);
-    expect(starting_pos.eq(starting_pos_saved));
+    try expect(starting_pos.eq(starting_pos_saved));
 }

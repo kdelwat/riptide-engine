@@ -14,43 +14,40 @@ const Logger = @import("./logger.zig").Logger;
 // Runs a search for the best move.
 // searchInfinite uses iterative deepening. It will search to a progressively greater
 // depth, returning each best move until it is signalled to stop.
-pub const InfiniteSearchContext = struct {
-    pos: *position.Position,
-    best_move: *?Move,
-    thread_ctx: SearchContext,
-};
 
 pub const SearchContext = struct {
     cancelled: *bool,
-    a: *Allocator,
+    a: Allocator,
     logger: Logger,
 };
 
-pub fn searchInfinite(context: InfiniteSearchContext) !void {
+pub fn searchInfinite(pos: *position.Position, best_move: *?Move, cancelled: *bool, a: Allocator, logger: Logger) !void {
     const alpha: i64 = -100000;
     const beta: i64 = 100000;
 
     var depth: u64 = 0;
 
-    try context.thread_ctx.logger.log("SEARCH", "thread started", .{});
+    try logger.log("SEARCH", "thread started", .{});
 
     var timer = try Timer.start();
-    while(true) {
-        try context.thread_ctx.logger.log("SEARCH", "searching: depth = {}", .{depth});
+    while (true) {
+        try logger.log("SEARCH", "searching: depth = {}", .{depth});
 
-        const result = search(context.pos, depth, alpha, beta, context.thread_ctx);
+        const result = search(pos, depth, alpha, beta, .{ .logger = logger, .a = a, .cancelled = cancelled });
 
-        try context.thread_ctx.logger.log("SEARCH", "complete: depth = {}, best move = {}, duration = {}",
-            .{depth, result, timer.lap() / std.time.ns_per_ms},
+        try logger.log(
+            "SEARCH",
+            "complete: depth = {}, best move = {?}, duration = {}",
+            .{ depth, result, timer.lap() / std.time.ns_per_ms },
         );
 
-        if (context.thread_ctx.cancelled.*) {
-            try context.thread_ctx.logger.log("SEARCH", "thread cancelled", .{});
+        if (cancelled.*) {
+            try logger.log("SEARCH", "thread cancelled", .{});
             break;
         }
 
-        if (result) |best_move| {
-            context.best_move.* = best_move;
+        if (result) |best| {
+            best_move.* = best;
         }
 
         depth += 1;
@@ -60,10 +57,10 @@ pub fn searchInfinite(context: InfiniteSearchContext) !void {
 // Search for the best move for a position, to a given depth.
 pub fn search(pos: *position.Position, depth: u64, alpha: i64, beta: i64, ctx: SearchContext) ?Move {
     // Log the starting position of the search
-//    var debug_buf = std.ArrayList(u8).init(ctx.a);
-//    defer debug_buf.deinit();
-//    debug.toFEN(pos.*, &debug_buf) catch unreachable;
-//    ctx.logger.log("SEARCH", "\tposition = {s}, depth = {}, alpha = {}, beta = {}", .{debug_buf.items, depth, alpha, beta}) catch unreachable;
+    //    var debug_buf = std.ArrayList(u8).init(ctx.a);
+    //    defer debug_buf.deinit();
+    //    debug.toFEN(pos.*, &debug_buf) catch unreachable;
+    //    ctx.logger.log("SEARCH", "\tposition = {s}, depth = {}, alpha = {}, beta = {}", .{debug_buf.items, depth, alpha, beta}) catch unreachable;
 
     // Generate all legal moves for the current position.
     var gen = MoveGenerator.init();
