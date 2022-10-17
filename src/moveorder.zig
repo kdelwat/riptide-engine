@@ -65,7 +65,7 @@ pub const MoveOrderer = struct {
         return self.moves[self.see_index(m)];
     }
 
-    fn see_index(self: *MoveOrderer, m: Move) usize {
+    fn see_index(_: *MoveOrderer, m: Move) usize {
         return @intCast(usize, m.from) * 64 + @intCast(usize, m.to);
     }
 
@@ -74,9 +74,7 @@ pub const MoveOrderer = struct {
     }
 };
 
-pub const MoveOrderContext = struct {
-    position: *position.Position, orderer: *MoveOrderer
-};
+pub const MoveOrderContext = struct { position: *position.Position, orderer: *MoveOrderer };
 
 pub fn buildContext(pos: *position.Position, orderer: *MoveOrderer) MoveOrderContext {
     return MoveOrderContext{ .position = pos, .orderer = orderer };

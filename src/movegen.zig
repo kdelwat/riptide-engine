@@ -12,8 +12,8 @@ const make_move = @import("./make_move.zig");
 const attack = @import("./attack.zig");
 const debug = @import("./debug.zig");
 const castling = @import("./castling.zig");
+const b = @import("./bitboard_ops.zig");
 const moveorder = @import("./moveorder.zig");
-usingnamespace @import("./bitboard_ops.zig");
 
 const AVERAGE_BRANCHING_FACTOR = 38;
 pub const MAX_DEPTH = 40;
@@ -73,7 +73,6 @@ pub const MoveGenerator = struct {
     pub fn generate(self: *MoveGenerator, pos: *position.Position) void {
         // Calling generate will increase the ply by 1, since it's called for each level of the alpha-beta search
         self.ply += 1;
-        std.debug.print("ply: {}\n", .{self.ply});
 
         // Set move pointers to the last value before generation
         self.next_to_generate[self.ply] = self.next_to_generate[self.ply - 1];
@@ -101,7 +100,7 @@ pub const MoveGenerator = struct {
     }
 
     // Add a known-legal move to the move list for the current ply
-    fn addLegal(self: *MoveGenerator, move: Move, pos: *position.Position) void {
+    fn addLegal(self: *MoveGenerator, move: Move, _: *position.Position) void {
         self.add(move);
     }
 
@@ -142,13 +141,13 @@ fn generatePawnMoves(moves: *MoveGenerator, pos: *position.Position) !void {
     const pawns = pos.board.get(PieceType.pawn, pos.to_move);
 
     var single_push = switch (pos.to_move) {
-        Color.white => northOne(pawns) & pos.board.empty(),
-        Color.black => southOne(pawns) & pos.board.empty(),
+        Color.white => b.northOne(pawns) & pos.board.empty(),
+        Color.black => b.southOne(pawns) & pos.board.empty(),
     };
 
     var double_push = switch (pos.to_move) {
-        Color.white => northOne(single_push) & empty & RANK_4,
-        Color.black => southOne(single_push) & empty & RANK_5,
+        Color.white => b.northOne(single_push) & empty & RANK_4,
+        Color.black => b.southOne(single_push) & empty & RANK_5,
     };
 
     const promotion_rank = switch (pos.to_move) {
@@ -159,13 +158,13 @@ fn generatePawnMoves(moves: *MoveGenerator, pos: *position.Position) !void {
     // If the single push results in a pawn ending up on the final rank, generate
     // promotion moves. Otherwise generate a quiet push.
     while (single_push != 0) {
-        const to = bitscanForwardAndReset(&single_push);
+        const to = b.bitscanForwardAndReset(&single_push);
         const from = switch (pos.to_move) {
             Color.white => to - 8,
             Color.black => to + 8,
         };
 
-        if (isOnRank(to, promotion_rank)) {
+        if (b.isOnRank(to, promotion_rank)) {
             moves.addPseudoLegal(Move.initPromotion(from, to, pos.to_move, PieceType.queen), pos);
             moves.addPseudoLegal(Move.initPromotion(from, to, pos.to_move, PieceType.knight), pos);
             moves.addPseudoLegal(Move.initPromotion(from, to, pos.to_move, PieceType.rook), pos);
@@ -177,7 +176,7 @@ fn generatePawnMoves(moves: *MoveGenerator, pos: *position.Position) !void {
 
     // Generate double push moves.
     while (double_push != 0) {
-        const to = bitscanForwardAndReset(&double_push);
+        const to = b.bitscanForwardAndReset(&double_push);
         const from = switch (pos.to_move) {
             Color.white => to - 16,
             Color.black => to + 16,
@@ -190,19 +189,19 @@ fn generatePawnCaptures(moves: *MoveGenerator, pos: *position.Position) !void {
     var opponent_pieces = pos.board.getColor(color.invert(pos.to_move));
 
     if (pos.en_passant_target != 0) {
-        opponent_pieces |= bitboardFromIndex(pos.en_passant_target);
+        opponent_pieces |= b.bitboardFromIndex(pos.en_passant_target);
     }
 
     const pawns = pos.board.get(PieceType.pawn, pos.to_move);
 
     var east_captures = switch (pos.to_move) {
-        Color.white => northEastOne(pawns) & opponent_pieces,
-        Color.black => southEastOne(pawns) & opponent_pieces,
+        Color.white => b.northEastOne(pawns) & opponent_pieces,
+        Color.black => b.southEastOne(pawns) & opponent_pieces,
     };
 
     var west_captures = switch (pos.to_move) {
-        Color.white => northWestOne(pawns) & opponent_pieces,
-        Color.black => southWestOne(pawns) & opponent_pieces,
+        Color.white => b.northWestOne(pawns) & opponent_pieces,
+        Color.black => b.southWestOne(pawns) & opponent_pieces,
     };
 
     const promotion_rank = switch (pos.to_move) {
@@ -213,7 +212,7 @@ fn generatePawnCaptures(moves: *MoveGenerator, pos: *position.Position) !void {
     // If the capture results in a pawn ending up on the final rank, generate
     // promotion capture moves. Otherwise generate a capture move.
     while (east_captures != 0) {
-        const to = bitscanForwardAndReset(&east_captures);
+        const to = b.bitscanForwardAndReset(&east_captures);
         const from = switch (pos.to_move) {
             Color.white => to - 9,
             Color.black => to + 7,
@@ -221,7 +220,7 @@ fn generatePawnCaptures(moves: *MoveGenerator, pos: *position.Position) !void {
 
         const captured_piece_type = pos.board.getPieceTypeAt(to);
 
-        if (isOnRank(to, promotion_rank)) {
+        if (b.isOnRank(to, promotion_rank)) {
             moves.addPseudoLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.queen, captured_piece_type), pos);
             moves.addPseudoLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.knight, captured_piece_type), pos);
             moves.addPseudoLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.rook, captured_piece_type), pos);
@@ -234,7 +233,7 @@ fn generatePawnCaptures(moves: *MoveGenerator, pos: *position.Position) !void {
     }
 
     while (west_captures != 0) {
-        const to = bitscanForwardAndReset(&west_captures);
+        const to = b.bitscanForwardAndReset(&west_captures);
         const from = switch (pos.to_move) {
             Color.white => to - 7,
             Color.black => to + 9,
@@ -242,7 +241,7 @@ fn generatePawnCaptures(moves: *MoveGenerator, pos: *position.Position) !void {
 
         const captured_piece_type = pos.board.getPieceTypeAt(to);
 
-        if (isOnRank(to, promotion_rank)) {
+        if (b.isOnRank(to, promotion_rank)) {
             moves.addPseudoLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.queen, captured_piece_type), pos);
             moves.addPseudoLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.knight, captured_piece_type), pos);
             moves.addPseudoLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.rook, captured_piece_type), pos);
@@ -263,19 +262,19 @@ fn generateKnightMoves(moves: *MoveGenerator, pos: *position.Position) !void {
     // While there are knights left to process, find the index and generate moves
     // for that knight
     while (knights != 0) {
-        const from = bitscanForwardAndReset(&knights);
+        const from = b.bitscanForwardAndReset(&knights);
         const targets = attack.KNIGHT_ATTACKS[from];
 
         var quiet = targets & empty;
         var captures = targets & opponent_pieces;
 
         while (quiet != 0) {
-            const to = bitscanForwardAndReset(&quiet);
+            const to = b.bitscanForwardAndReset(&quiet);
             moves.addPseudoLegal(Move.initQuiet(from, to, pos.to_move, PieceType.knight), pos);
         }
 
         while (captures != 0) {
-            const to = bitscanForwardAndReset(&captures);
+            const to = b.bitscanForwardAndReset(&captures);
             const captured_piece_type = pos.board.getPieceTypeAt(to);
             moves.addPseudoLegal(Move.initCapture(from, to, pos.to_move, PieceType.knight, captured_piece_type), pos);
         }
@@ -292,12 +291,12 @@ fn generateKingMoves(moves: *MoveGenerator, pos: *position.Position) !void {
     var captures = targets & opponent_pieces;
 
     while (quiet != 0) {
-        const to = bitscanForwardAndReset(&quiet);
+        const to = b.bitscanForwardAndReset(&quiet);
         moves.addPseudoLegal(Move.initQuiet(from, to, pos.to_move, PieceType.king), pos);
     }
 
     while (captures != 0) {
-        const to = bitscanForwardAndReset(&captures);
+        const to = b.bitscanForwardAndReset(&captures);
         const captured_piece_type = pos.board.getPieceTypeAt(to);
         moves.addPseudoLegal(Move.initCapture(from, to, pos.to_move, PieceType.king, captured_piece_type), pos);
     }
@@ -313,9 +312,9 @@ fn generateSlidingMoves(moves: *MoveGenerator, pos: *position.Position) !void {
     var bishops = pos.board.get(PieceType.bishop, pos.to_move);
 
     while (queens != 0) {
-        const from = bitscanForwardAndReset(&queens);
+        const from = b.bitscanForwardAndReset(&queens);
         var targets: u64 = 0;
-        const bitboard = bitboardFromIndex(from);
+        const bitboard = b.bitboardFromIndex(from);
 
         targets |= attack.southAttacks(bitboard, empty);
         targets |= attack.northAttacks(bitboard, empty);
@@ -330,21 +329,21 @@ fn generateSlidingMoves(moves: *MoveGenerator, pos: *position.Position) !void {
         var captures = targets & opponent_pieces;
 
         while (quiet != 0) {
-            const to = bitscanForwardAndReset(&quiet);
+            const to = b.bitscanForwardAndReset(&quiet);
             moves.addPseudoLegal(Move.initQuiet(from, to, pos.to_move, PieceType.queen), pos);
         }
 
         while (captures != 0) {
-            const to = bitscanForwardAndReset(&captures);
+            const to = b.bitscanForwardAndReset(&captures);
             const captured_piece_type = pos.board.getPieceTypeAt(to);
             moves.addPseudoLegal(Move.initCapture(from, to, pos.to_move, PieceType.queen, captured_piece_type), pos);
         }
     }
 
     while (rooks != 0) {
-        const from = bitscanForwardAndReset(&rooks);
+        const from = b.bitscanForwardAndReset(&rooks);
         var targets: u64 = 0;
-        const bitboard = bitboardFromIndex(from);
+        const bitboard = b.bitboardFromIndex(from);
         targets |= attack.southAttacks(bitboard, empty);
         targets |= attack.northAttacks(bitboard, empty);
         targets |= attack.eastAttacks(bitboard, empty);
@@ -354,21 +353,21 @@ fn generateSlidingMoves(moves: *MoveGenerator, pos: *position.Position) !void {
         var captures = targets & opponent_pieces;
 
         while (quiet != 0) {
-            const to = bitscanForwardAndReset(&quiet);
+            const to = b.bitscanForwardAndReset(&quiet);
             moves.addPseudoLegal(Move.initQuiet(from, to, pos.to_move, PieceType.rook), pos);
         }
 
         while (captures != 0) {
-            const to = bitscanForwardAndReset(&captures);
+            const to = b.bitscanForwardAndReset(&captures);
             const captured_piece_type = pos.board.getPieceTypeAt(to);
             moves.addPseudoLegal(Move.initCapture(from, to, pos.to_move, PieceType.rook, captured_piece_type), pos);
         }
     }
 
     while (bishops != 0) {
-        const from = bitscanForwardAndReset(&bishops);
+        const from = b.bitscanForwardAndReset(&bishops);
         var targets: u64 = 0;
-        const bitboard = bitboardFromIndex(from);
+        const bitboard = b.bitboardFromIndex(from);
 
         targets |= attack.northEastAttacks(bitboard, empty);
         targets |= attack.northWestAttacks(bitboard, empty);
@@ -379,12 +378,12 @@ fn generateSlidingMoves(moves: *MoveGenerator, pos: *position.Position) !void {
         var captures = targets & opponent_pieces;
 
         while (quiet != 0) {
-            const to = bitscanForwardAndReset(&quiet);
+            const to = b.bitscanForwardAndReset(&quiet);
             moves.addPseudoLegal(Move.initQuiet(from, to, pos.to_move, PieceType.bishop), pos);
         }
 
         while (captures != 0) {
-            const to = bitscanForwardAndReset(&captures);
+            const to = b.bitscanForwardAndReset(&captures);
             const captured_piece_type = pos.board.getPieceTypeAt(to);
             moves.addPseudoLegal(Move.initCapture(from, to, pos.to_move, PieceType.bishop, captured_piece_type), pos);
         }
@@ -488,7 +487,7 @@ pub fn findSmallestAttackerMove(pos: *position.Position, to: u8, side: Color) ?M
     const captured_piece_type = pos.board.getPieceTypeAt(to);
 
     // Is it a pawn? Is it a knight? Is it a slider? No, it's all of the above!
-    var super_pseudo_piece = bitboardFromIndex(to);
+    var super_pseudo_piece = b.bitboardFromIndex(to);
 
     // Pawn attacks
     var pawn_attack_map = switch (color.invert(side)) {
@@ -499,7 +498,7 @@ pub fn findSmallestAttackerMove(pos: *position.Position, to: u8, side: Color) ?M
     var attacking_pawns = pawn_attack_map & pos.board.get(PieceType.pawn, side);
 
     if (attacking_pawns > 0) {
-        const attack_from = bitscanForwardAndReset(&attacking_pawns);
+        const attack_from = b.bitscanForwardAndReset(&attacking_pawns);
         return Move.initCapture(attack_from, to, side, PieceType.pawn, captured_piece_type);
     }
 
@@ -508,7 +507,7 @@ pub fn findSmallestAttackerMove(pos: *position.Position, to: u8, side: Color) ?M
     var attacking_knights = knight_attack_map & pos.board.get(PieceType.knight, side);
 
     if (attacking_knights > 0) {
-        const attack_from = bitscanForwardAndReset(&attacking_knights);
+        const attack_from = b.bitscanForwardAndReset(&attacking_knights);
         return Move.initCapture(attack_from, to, side, PieceType.knight, captured_piece_type);
     }
 
@@ -520,7 +519,7 @@ pub fn findSmallestAttackerMove(pos: *position.Position, to: u8, side: Color) ?M
     var attacking_bishops = bishop_attack_map & pos.board.get(PieceType.bishop, side);
 
     if (attacking_bishops > 0) {
-        const attack_from = bitscanForwardAndReset(&attacking_bishops);
+        const attack_from = b.bitscanForwardAndReset(&attacking_bishops);
         return Move.initCapture(attack_from, to, side, PieceType.bishop, captured_piece_type);
     }
 
@@ -529,7 +528,7 @@ pub fn findSmallestAttackerMove(pos: *position.Position, to: u8, side: Color) ?M
     var attacking_rooks = rook_attack_map & pos.board.get(PieceType.rook, side);
 
     if (attacking_rooks > 0) {
-        const attack_from = bitscanForwardAndReset(&attacking_rooks);
+        const attack_from = b.bitscanForwardAndReset(&attacking_rooks);
         return Move.initCapture(attack_from, to, side, PieceType.rook, captured_piece_type);
     }
 
@@ -538,7 +537,7 @@ pub fn findSmallestAttackerMove(pos: *position.Position, to: u8, side: Color) ?M
     var attacking_queens = queen_attack_map & pos.board.get(PieceType.queen, side);
 
     if (attacking_queens > 0) {
-        const attack_from = bitscanForwardAndReset(&attacking_queens);
+        const attack_from = b.bitscanForwardAndReset(&attacking_queens);
         return Move.initCapture(attack_from, to, side, PieceType.queen, captured_piece_type);
     }
 
@@ -547,7 +546,7 @@ pub fn findSmallestAttackerMove(pos: *position.Position, to: u8, side: Color) ?M
     var attacking_kings = king_attack_map & pos.board.get(PieceType.king, side);
 
     if (attacking_kings > 0) {
-        const attack_from = bitscanForwardAndReset(&attacking_kings);
+        const attack_from = b.bitscanForwardAndReset(&attacking_kings);
         return Move.initCapture(attack_from, to, side, PieceType.king, captured_piece_type);
     }
 

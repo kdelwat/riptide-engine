@@ -32,11 +32,11 @@ pub const NOT_A_FILE: u64 = 0xfefefefefefefefe;
 pub const NOT_H_FILE: u64 = 0x7f7f7f7f7f7f7f7f;
 
 pub inline fn southOne(b: u64) u64 {
-    return  b >> 8;
+    return b >> 8;
 }
 
 pub inline fn northOne(b: u64) u64 {
-    return  b << 8;
+    return b << 8;
 }
 
 pub inline fn eastOne(b: u64) u64 {
@@ -67,7 +67,7 @@ pub inline fn northWestOne(b: u64) u64 {
 // The caller is responsible for not passing in b == 0
 pub inline fn bitscanForward(b: u64) u8 {
     // Count trailing zeroes is equivalent to a bitscan forward
-    return @ctz(u64, b);
+    return @ctz(b);
 }
 
 // Find the least significant 1 and remove it.
@@ -79,7 +79,7 @@ pub inline fn bitscanForwardAndReset(b: *u64) u8 {
 
 // Generate a bitboard with a 1 at the given index
 pub inline fn bitboardFromIndex(index: u8) u64 {
-    return @truncate(u64, @as(u256,1) << index);
+    return @truncate(u64, @as(u256, 1) << index);
 }
 
 // Determine whether a bitboard index is on a certain rank
@@ -91,5 +91,5 @@ pub fn isOnRank(bitboard_index: u8, rank_index: u8) bool {
 // On supported architectures the @byteSwap builtin will use the intrinsic
 // endian conversion instructions
 pub inline fn flipV(b: u64) u64 {
-    return @byteSwap(u64, b);
+    return @byteSwap(b);
 }

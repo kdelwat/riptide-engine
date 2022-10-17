@@ -18,11 +18,11 @@ const Color = @import("./color.zig").Color;
 // Black queen+--+
 
 pub const CanCastle = enum(u4) {
-    white_king  = 0b1000,
+    white_king = 0b1000,
     white_queen = 0b0100,
-    black_king  = 0b0010,
+    black_king = 0b0010,
     black_queen = 0b0001,
-    invalid     = 0,
+    invalid = 0,
 };
 
 pub const CastleSide = enum {

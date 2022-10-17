@@ -5,3 +5,4 @@
 /.idea
 /libs/mecha/zig-cache
 /libs/zig-cache/bin
+zig-out/

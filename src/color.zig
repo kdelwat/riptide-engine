@@ -4,7 +4,7 @@ pub const Color = enum(u1) {
 };
 
 pub fn invert(c: Color) Color {
-    return switch(c) {
+    return switch (c) {
         Color.white => Color.black,
         Color.black => Color.white,
     };

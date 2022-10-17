@@ -16,34 +16,21 @@ const Logger = @import("./logger.zig").Logger;
 pub const INFINITY = 100000;
 pub const ASPIRATION_WINDOW = 100; // One pawn
 
-// Runs a search for the best move.
-// searchInfinite uses iterative deepening. It will search to a progressively greater
-// depth, returning each best move until it is signalled to stop.
-pub const InfiniteSearchContext = struct {
-    pos: *position.Position,
-    best_move: *?Move,
-    thread_ctx: SearchContext,
-};
+pub const SearchContext = struct { cancelled: *bool, a: Allocator, logger: Logger, stats: *SearchStats };
 
-pub const SearchContext = struct {
-    cancelled: *bool, a: *Allocator, logger: Logger, stats: *SearchStats
-};
-
-pub const SearchStats = struct {
-    nodes_evaluated: u64, nodes_visited: u64
-};
+pub const SearchStats = struct { nodes_evaluated: u64, nodes_visited: u64 };
 
 // Infinite search uses an iterative deepening approach. Searches are performed at
 // progressively greater depths, until time runs out.
 // Based on the result from the prevous iteration, alpha and beta are estimated
 // for the next search, which theoretically leads to a more efficient search tree.
-pub fn searchInfinite(context: InfiniteSearchContext) !void {
+pub fn searchInfinite(pos: *position.Position, best_move: *?Move, cancelled: *bool, stats: *SearchStats, a: Allocator, logger: Logger) !void {
     var alpha: i64 = -INFINITY;
     var beta: i64 = INFINITY;
 
     var depth: u64 = 1;
 
-    try context.thread_ctx.logger.log("SEARCH", "thread started", .{});
+    try logger.log("SEARCH", "thread started", .{});
 
     var pv = PVTable.init();
 
@@ -51,32 +38,32 @@ pub fn searchInfinite(context: InfiniteSearchContext) !void {
 
     var result: ?SearchResult = null;
     while (true) {
-        try context.thread_ctx.logger.log("SEARCH", "searching: depth = {}", .{depth});
+        try logger.log("SEARCH", "searching: depth = {}", .{depth});
 
-        result = search(context.pos, &pv, depth, alpha, beta, context.thread_ctx);
+        result = search(pos, &pv, depth, alpha, beta, .{ .logger = logger, .a = a, .cancelled = cancelled, .stats = stats });
 
-        try context.thread_ctx.logger.log(
+        try logger.log(
             "SEARCH",
-            "complete: depth = {}, best move = {}, duration = {}",
+            "complete: depth = {}, best move = {?}, duration = {}",
             .{ depth, result, timer.lap() / std.time.ns_per_ms },
         );
 
-        if (context.thread_ctx.cancelled.*) {
-            try context.thread_ctx.logger.log("SEARCH", "thread cancelled", .{});
+        if (cancelled.*) {
+            try logger.log("SEARCH", "thread cancelled", .{});
             break;
         }
 
-        if (result) |best_move| {
-            if (best_move.score <= alpha or best_move.score >= beta) {
+        if (result) |bm| {
+            if (bm.score <= alpha or bm.score >= beta) {
                 // Aspiration window missed; do a full re-search
                 std.debug.print("Missed aspiration window at depth {}\n", .{depth});
                 alpha = -INFINITY;
                 beta = INFINITY;
                 continue;
             } else {
-                alpha = best_move.score - ASPIRATION_WINDOW;
-                beta = best_move.score + ASPIRATION_WINDOW;
-                context.best_move.* = best_move.move;
+                alpha = bm.score - ASPIRATION_WINDOW;
+                beta = bm.score + ASPIRATION_WINDOW;
+                best_move.* = bm.move;
             }
         }
 
@@ -111,9 +98,7 @@ pub fn searchUntilDepth(pos: *position.Position, max_depth: u64, context: Search
 }
 
 // Search for the best move for a position, to a given depth.
-const SearchResult = struct {
-    move: Move, score: i64
-};
+const SearchResult = struct { move: Move, score: i64 };
 
 pub fn search(pos: *position.Position, pv: *PVTable, depth: u64, alpha: i64, beta: i64, ctx: SearchContext) ?SearchResult {
     var gen = MoveGenerator.init();

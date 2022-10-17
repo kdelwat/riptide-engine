@@ -1,16 +1,10 @@
 const toUnion = @import("../to_union.zig").toUnion;
 const UciCommand = @import("../../uci.zig").UciCommand;
 const UciCommandSetOption = @import("../../uci.zig").UciCommandSetOption;
-usingnamespace @import("mecha");
+const m = @import("mecha");
 
-pub const p_setoption = map(UciCommand, toUnion("setoption", UciCommand), combine(.{string("setoption "), set_option}));
+pub const p_setoption = m.map(UciCommand, toUnion("setoption", UciCommand), m.combine(.{ m.string("setoption "), set_option }));
 
-const any_char = oneOf(.{discard(utf8.range('0', '9')), discard(utf8.range('a', 'z')), discard(utf8.range('A', 'Z'))});
+const any_char = m.oneOf(.{ m.discard(m.utf8.range('0', '9')), m.discard(m.utf8.range('a', 'z')), m.discard(m.utf8.range('A', 'Z')) });
 
-const set_option = map(UciCommandSetOption, toStruct(UciCommandSetOption), combine(
-    .{
-        string("name "),
-        asStr(many(any_char, .{.collect = false})),
-        opt(combine(.{string(" value "), asStr(many(oneOf(.{any_char, utf8.char(' ')}), .{.collect = false}))}))
-    }
-));
+const set_option = m.map(UciCommandSetOption, m.toStruct(UciCommandSetOption), m.combine(.{ m.string("name "), m.asStr(m.many(any_char, .{ .collect = false })), m.opt(m.combine(.{ m.string(" value "), m.asStr(m.many(m.oneOf(.{ any_char, m.utf8.char(' ') }), .{ .collect = false })) })) }));

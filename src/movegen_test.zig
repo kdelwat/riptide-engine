@@ -99,7 +99,7 @@ test "generateLegalMoves" {
         var pos = fromFEN(test_case.position);
 
         gen.generate(&pos);
-        expectEqual(test_case.expected, gen.count());
+        try expectEqual(test_case.expected, gen.count());
     }
 }
 
@@ -125,8 +125,8 @@ test "isKingInCheck" {
     for (KING_IN_CHECK_TEST_CASES) |test_case| {
         std.debug.print("isKingInCheck: {s}\n", .{test_case.position});
         var pos = fromFEN(test_case.position);
-        var attack_map = attack.generateAttackMap(&pos, color.invert(test_case.to_move));
+
         pos.to_move = color.invert(test_case.to_move);
-        expectEqual(test_case.expected, isKingInCheck(&pos));
+        try expectEqual(test_case.expected, isKingInCheck(&pos));
     }
 }

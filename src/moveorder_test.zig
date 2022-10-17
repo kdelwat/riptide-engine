@@ -35,6 +35,6 @@ test "evaluateCapture" {
         var pos = fromFEN(test_case.position);
 
         const see_value = moveorder.evaluateCapture(&pos, test_case.move);
-        expectEqual(test_case.expected, see_value);
+        try expectEqual(test_case.expected, see_value);
     }
 }
