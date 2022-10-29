@@ -11,6 +11,8 @@ const File = std.fs.File;
 const Timer = std.time.Timer;
 const Logger = @import("./logger.zig").Logger;
 
+pub const INFINITY = 100000;
+
 // Runs a search for the best move.
 // searchInfinite uses iterative deepening. It will search to a progressively greater
 // depth, returning each best move until it is signalled to stop.
@@ -21,27 +23,31 @@ pub const InfiniteSearchContext = struct {
 };
 
 pub const SearchContext = struct {
-    cancelled: *bool,
-    a: *Allocator,
-    logger: Logger,
+    cancelled: *bool, a: *Allocator, logger: Logger, stats: *SearchStats
+};
+
+pub const SearchStats = struct {
+    nodes_evaluated: u64, nodes_visited: u64
 };
 
 pub fn searchInfinite(context: InfiniteSearchContext) !void {
-    const alpha: i64 = -100000;
-    const beta: i64 = 100000;
+    const alpha: i64 = -INFINITY;
+    const beta: i64 = INFINITY;
 
     var depth: u64 = 0;
 
     try context.thread_ctx.logger.log("SEARCH", "thread started", .{});
 
     var timer = try Timer.start();
-    while(true) {
+    while (true) {
         try context.thread_ctx.logger.log("SEARCH", "searching: depth = {}", .{depth});
 
         const result = search(context.pos, depth, alpha, beta, context.thread_ctx);
 
-        try context.thread_ctx.logger.log("SEARCH", "complete: depth = {}, best move = {}, duration = {}",
-            .{depth, result, timer.lap() / std.time.ns_per_ms},
+        try context.thread_ctx.logger.log(
+            "SEARCH",
+            "complete: depth = {}, best move = {}, duration = {}",
+            .{ depth, result, timer.lap() / std.time.ns_per_ms },
         );
 
         if (context.thread_ctx.cancelled.*) {
@@ -57,13 +63,26 @@ pub fn searchInfinite(context: InfiniteSearchContext) !void {
     }
 }
 
+pub fn searchUntilDepth(pos: *position.Position, max_depth: u64, context: SearchContext) void {
+    const alpha: i64 = -INFINITY;
+    const beta: i64 = INFINITY;
+
+    var depth: u64 = 0;
+
+    while (depth <= max_depth) {
+        const result = search(pos, depth, alpha, beta, context);
+
+        depth += 1;
+    }
+}
+
 // Search for the best move for a position, to a given depth.
 pub fn search(pos: *position.Position, depth: u64, alpha: i64, beta: i64, ctx: SearchContext) ?Move {
     // Log the starting position of the search
-//    var debug_buf = std.ArrayList(u8).init(ctx.a);
-//    defer debug_buf.deinit();
-//    debug.toFEN(pos.*, &debug_buf) catch unreachable;
-//    ctx.logger.log("SEARCH", "\tposition = {s}, depth = {}, alpha = {}, beta = {}", .{debug_buf.items, depth, alpha, beta}) catch unreachable;
+    //    var debug_buf = std.ArrayList(u8).init(ctx.a);
+    //    defer debug_buf.deinit();
+    //    debug.toFEN(pos.*, &debug_buf) catch unreachable;
+    //    ctx.logger.log("SEARCH", "\tposition = {s}, depth = {}, alpha = {}, beta = {}", .{debug_buf.items, depth, alpha, beta}) catch unreachable;
 
     // Generate all legal moves for the current position.
     var gen = MoveGenerator.init();
@@ -104,8 +123,11 @@ pub fn search(pos: *position.Position, depth: u64, alpha: i64, beta: i64, ctx: S
 // This function was implemented from the pseudocode at
 // https://chessprogramming.wikispaces.com/Alpha-Beta.
 fn alphaBeta(pos: *position.Position, gen: *MoveGenerator, alpha: i64, beta: i64, depth: u64, ctx: SearchContext) i64 {
+    ctx.stats.nodes_visited += 1;
+
     // At the bottom of the tree, return the score of the position for the attacking player.
     if (depth == 0) {
+        ctx.stats.nodes_evaluated += 1;
         return evaluate.evaluate(pos);
     }
 

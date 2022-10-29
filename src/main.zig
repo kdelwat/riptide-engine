@@ -22,8 +22,7 @@ const start_position = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
 // to ensure that search can continue in the background while the engine
 // continue to receive commands.
 const GlobalData = struct {
-    pos: position.Position,
-    best_move: ?Move,
+    pos: position.Position, best_move: ?Move, stats: search.SearchStats
 };
 
 var engine_data: GlobalData = undefined;
@@ -153,6 +152,7 @@ fn handleCommand(input: []const u8, logger: Logger, a: *Allocator) !bool {
             engine_data = GlobalData{
                 .pos = position.fromFENStruct(pos.fen),
                 .best_move = null,
+                .stats = search.SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 },
             };
         },
 
@@ -171,6 +171,7 @@ fn startNewGame(pos: []const u8, a: *Allocator) void {
     engine_data = GlobalData{
         .pos = position.fromFEN(start_position, a) catch unreachable,
         .best_move = null,
+        .stats = search.SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 },
     };
 }
 
@@ -233,19 +234,19 @@ fn startAnalysis(options: []GoOption, logger: Logger, a: *Allocator) !void {
         switch (opts.search_mode) {
             SearchMode.depth => {
                 var should_cancel: bool = false;
-                const best_move = search.search(&engine_data.pos, opts.depth, -100000, 100000, search.SearchContext{ .a = a, .cancelled = &should_cancel, .logger = logger });
+                const best_move = search.search(&engine_data.pos, opts.depth, -100000, 100000, search.SearchContext{ .a = a, .cancelled = &should_cancel, .logger = logger, .stats = &engine_data.stats });
                 try sendBestMove(best_move, logger);
             },
             SearchMode.mate => {},
             SearchMode.ponder => {},
             SearchMode.movetime => {
-                _ = try worker.start(&engine_data.pos, &engine_data.best_move, logger, a);
+                _ = try worker.start(&engine_data.pos, &engine_data.best_move, &engine_data.stats, logger, a);
                 std.time.sleep(opts.movetime * std.time.ns_per_ms);
                 try stopAnalysis(logger);
             },
             SearchMode.nodes => {},
             SearchMode.infinite => {
-                _ = try worker.start(&engine_data.pos, &engine_data.best_move, logger, a);
+                _ = try worker.start(&engine_data.pos, &engine_data.best_move, &engine_data.stats, logger, a);
             },
         }
     }

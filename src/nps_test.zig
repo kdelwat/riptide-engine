@@ -1,5 +1,7 @@
 const position = @import("./position.zig");
 const perft = @import("./perft.zig").perft;
+const search = @import("./search.zig");
+const logger = @import("./logger.zig");
 const std = @import("std");
 const expect = std.testing.expect;
 const test_allocator = std.testing.allocator;
@@ -28,4 +30,37 @@ test "evaluation nodes per second" {
     }
 
     std.debug.print("EPS: {}\n", .{@floatToInt(u64, @intToFloat(f64, 1000000) / (@intToFloat(f64, timer.read()) / @intToFloat(f64, std.time.ns_per_s)))});
+}
+
+test "search efficiency (single tree)" {
+    var start_pos = &fromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+
+    var ctx_cancelled = false;
+    var l = logger.Logger.init();
+    var stats = search.SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 };
+
+    _ = search.search(start_pos, 5, -search.INFINITY, search.INFINITY, search.SearchContext{ .cancelled = &ctx_cancelled, .logger = l, .a = test_allocator, .stats = &stats });
+
+    std.debug.print("Nodes visited single search: {}/{}\n", .{ stats.nodes_visited, 4865609 });
+    std.debug.print("Nodes evaluated single search: {}/{}\n", .{ stats.nodes_evaluated, 4865609 });
+}
+
+test "search efficiency (iterative deepening)" {
+    var start_pos = &fromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+
+    var ctx_cancelled = false;
+    var l = logger.Logger.init();
+    var stats = search.SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 };
+
+    _ = search.searchUntilDepth(start_pos, 5, search.SearchContext{ .cancelled = &ctx_cancelled, .logger = l, .a = test_allocator, .stats = &stats });
+
+    const tree_nodes =
+        20 +
+        400 +
+        8902 +
+        197281 +
+        4865609;
+
+    std.debug.print("Nodes visited ID: {}/{}\n", .{ stats.nodes_visited, tree_nodes });
+    std.debug.print("Nodes evaluated ID: {}/{}\n", .{ stats.nodes_evaluated, tree_nodes });
 }

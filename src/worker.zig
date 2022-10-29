@@ -21,12 +21,10 @@ var thread: ?*std.Thread = null;
 // Used to signal to the search thread that it should exit
 var cancel_search: bool = false;
 
-const WorkerError = error {
-    WorkerAlreadyRunning,
-};
+const WorkerError = error{WorkerAlreadyRunning};
 
 // Spawn the worker thread, or return an error if it has already been started
-pub fn start(pos: *position.Position, best_move: *?Move, logger: Logger, a: *Allocator) !void {
+pub fn start(pos: *position.Position, best_move: *?Move, stats: *search.SearchStats, logger: Logger, a: *Allocator) !void {
     if (status != WorkerThreadStatus.not_running) {
         return WorkerError.WorkerAlreadyRunning;
     }
@@ -38,6 +36,7 @@ pub fn start(pos: *position.Position, best_move: *?Move, logger: Logger, a: *All
             .cancelled = &cancel_search,
             .a = a,
             .logger = logger,
+            .stats = stats,
         },
     };
 
