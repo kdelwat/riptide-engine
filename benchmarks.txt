@@ -3,4 +3,5 @@ Version          STS       NPS       EPS     Perft    Eval (tree)   Visit (tree)
 993c27b          997   1942770   2280953    91.26s                                                              | Add Static Exchange Evaluation (naive)
 latest           994   1931506   2272052    88.95s        3165411        3515362        3550644        3953067  | Add search statistics
 latest           980   1266704   2233665   147.52s        3174384        3523939        3559573        3961598  | Pre-compute SEE
-`
+latest           981   1908866   2253272    91.60s        3174384        3523939        3559573        3961598  | Avoid unnecessary clearing of SEE state
+

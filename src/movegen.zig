@@ -107,7 +107,6 @@ pub const MoveGenerator = struct {
     // Order moves based on fitness heuristics. The quicker we see a good move,
     // the better alpha-beta search works.
     fn orderMoves(self: *MoveGenerator, pos: *position.Position) void {
-        self.orderer.clear();
         self.orderer.preprocess(pos, self.moves[self.next_to_play[self.ply]..self.next_to_generate[self.ply]]);
         const context = moveorder.buildContext(pos, &self.orderer);
         std.sort.sort(Move, self.moves[self.next_to_play[self.ply]..self.next_to_generate[self.ply]], &context, moveorder.cmp);
