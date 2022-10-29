@@ -11,12 +11,56 @@ const attack = @import("./attack.zig");
 const evaluate = @import("./evaluate.zig");
 const position = @import("./position.zig");
 
-pub const MoveOrderContext = struct {
-    position: *position.Position
+const MOVE_METADATA_ARRAY_SIZE = 64 * 64;
+
+const MoveEvaluation = struct {
+    see_value: ?i64,
 };
 
-pub fn buildContext(pos: *position.Position, moves: []Move) MoveOrderContext {
-    return MoveOrderContext{ .position = pos };
+pub const MoveOrderer = struct {
+    moves: [MOVE_METADATA_ARRAY_SIZE]MoveEvaluation,
+
+    pub fn init() MoveOrderer {
+        var orderer = MoveOrderer{ .moves = undefined };
+
+        orderer.clear();
+
+        return orderer;
+    }
+
+    pub fn preprocess(self: *MoveOrderer, pos: *position.Position, moves: []Move) void {
+        for (moves) |m| {
+            if (m.move_type == move.MoveType.capture) {
+                const see_value = evaluateCapture(pos, m);
+                self.moves[self.see_index(m)].see_value = see_value;
+            }
+        }
+    }
+
+    pub fn clear(self: *MoveOrderer) void {
+        var i: u64 = 0;
+
+        while (i < MOVE_METADATA_ARRAY_SIZE) {
+            self.moves[i] = MoveEvaluation{ .see_value = null };
+            i += 1;
+        }
+    }
+
+    pub fn get_see(self: *MoveOrderer, m: Move) ?i64 {
+        return self.moves[self.see_index(m)].see_value;
+    }
+
+    fn see_index(self: *MoveOrderer, m: Move) usize {
+        return @intCast(usize, m.from) * 64 + @intCast(usize, m.to);
+    }
+};
+
+pub const MoveOrderContext = struct {
+    position: *position.Position, orderer: *MoveOrderer
+};
+
+pub fn buildContext(pos: *position.Position, orderer: *MoveOrderer) MoveOrderContext {
+    return MoveOrderContext{ .position = pos, .orderer = orderer };
 }
 
 pub fn cmp(context: *const MoveOrderContext, a: Move, b: Move) bool {
@@ -26,10 +70,11 @@ pub fn cmp(context: *const MoveOrderContext, a: Move, b: Move) bool {
     }
 
     if (a.move_type == move.MoveType.capture and b.move_type == move.MoveType.capture) {
-        const a_see = evaluateCapture(context.position, a);
-        const b_see = evaluateCapture(context.position, a);
+        const a_see = context.orderer.get_see(a) orelse unreachable;
+        const b_see = context.orderer.get_see(b) orelse unreachable;
 
-        return a_see < b_see;
+        // Order by descending SEE value
+        return a_see > b_see;
     }
 
     return @intCast(u4, @enumToInt(a.move_type)) < @intCast(u4, @enumToInt(b.move_type));

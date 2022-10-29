@@ -35,12 +35,15 @@ pub const MoveGenerator = struct {
     // the current ply of the search
     ply: usize,
 
+    orderer: moveorder.MoveOrderer,
+
     pub fn init() MoveGenerator {
         return MoveGenerator{
             .moves = undefined, // This can be junk, we'll take care of filling it gradually
             .next_to_play = [_]usize{0} ** MAX_DEPTH,
             .next_to_generate = [_]usize{0} ** MAX_DEPTH,
             .ply = 0,
+            .orderer = moveorder.MoveOrderer.init(),
         };
     }
 
@@ -104,7 +107,9 @@ pub const MoveGenerator = struct {
     // Order moves based on fitness heuristics. The quicker we see a good move,
     // the better alpha-beta search works.
     fn orderMoves(self: *MoveGenerator, pos: *position.Position) void {
-        const context = moveorder.buildContext(pos, self.moves[self.next_to_play[self.ply]..self.next_to_generate[self.ply]]);
+        self.orderer.clear();
+        self.orderer.preprocess(pos, self.moves[self.next_to_play[self.ply]..self.next_to_generate[self.ply]]);
+        const context = moveorder.buildContext(pos, &self.orderer);
         std.sort.sort(Move, self.moves[self.next_to_play[self.ply]..self.next_to_generate[self.ply]], &context, moveorder.cmp);
     }
 };
