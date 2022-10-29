@@ -8,12 +8,12 @@ usingnamespace @import("./bitboard_ops.zig");
 // King attack indices, based on https://www.chessprogramming.org/King_Pattern#KingAttacks
 // We can generate the final KING_ATTACKS array at compile time, which gives an attack
 // bitboard for each king position.
-fn generateKingAttackBitboard(king_bitboard: u64) u64 {
-   var temp_king_bitboard = king_bitboard;
-   var attacks = eastOne(temp_king_bitboard) | westOne(temp_king_bitboard);
-   temp_king_bitboard |= attacks;
-   attacks |= northOne(temp_king_bitboard) | southOne(temp_king_bitboard);
-   return attacks;
+pub fn generateKingAttackBitboard(king_bitboard: u64) u64 {
+    var temp_king_bitboard = king_bitboard;
+    var attacks = eastOne(temp_king_bitboard) | westOne(temp_king_bitboard);
+    temp_king_bitboard |= attacks;
+    attacks |= northOne(temp_king_bitboard) | southOne(temp_king_bitboard);
+    return attacks;
 }
 
 fn generateKingAttackArray() [64]u64 {
@@ -33,22 +33,22 @@ pub const KING_ATTACKS: [64]u64 = comptime generateKingAttackArray();
 // Knight attack indices, based on https://www.chessprogramming.org/Knight_Pattern#KnightAttacks
 // We can generate the final KNIGHT_ATTACKS array at compile time, which gives an attack
 // bitboard for each knight position.
-fn generateKnightAttackBitboard(knight_bitboard: u64) u64 {
-   var temp_bitboard = knight_bitboard;
-   var attacks: u64 = 0;
-   var east = eastOne(temp_bitboard);
-   var west = westOne(temp_bitboard);
+pub fn generateKnightAttackBitboard(knight_bitboard: u64) u64 {
+    var temp_bitboard = knight_bitboard;
+    var attacks: u64 = 0;
+    var east = eastOne(temp_bitboard);
+    var west = westOne(temp_bitboard);
 
-   attacks = (east | west) << 16;
-   attacks |= (east | west) >> 16;
+    attacks = (east | west) << 16;
+    attacks |= (east | west) >> 16;
 
-   east = eastOne(east);
-   west = westOne(west);
+    east = eastOne(east);
+    west = westOne(west);
 
-   attacks |= (east | west) << 8;
-   attacks |= (east | west) >> 8;
+    attacks |= (east | west) << 8;
+    attacks |= (east | west) >> 8;
 
-   return attacks;
+    return attacks;
 }
 
 fn generateKnightAttackArray() [64]u64 {
@@ -69,15 +69,46 @@ pub const KNIGHT_ATTACKS: [64]u64 = comptime generateKnightAttackArray();
 // We can generate the final PAWN_ATTACKS array at compile time, which gives an attack
 // bitboard for each pawn position.
 pub fn generateWhitePawnAttackBitboard(pawn_bitboard: u64) u64 {
-   return northEastOne(pawn_bitboard) | northWestOne(pawn_bitboard);
+    return northEastOne(pawn_bitboard) | northWestOne(pawn_bitboard);
 }
 
 pub fn generateWhitePawnEastAttacks(pawn_bitboard: u64) u64 {
-   return northEastOne(pawn_bitboard) | northWestOne(pawn_bitboard);
+    return northEastOne(pawn_bitboard) | northWestOne(pawn_bitboard);
 }
 
 pub fn generateBlackPawnAttackBitboard(pawn_bitboard: u64) u64 {
-   return southEastOne(pawn_bitboard) | southWestOne(pawn_bitboard);
+    return southEastOne(pawn_bitboard) | southWestOne(pawn_bitboard);
+}
+
+pub fn generateBishopAttackBitboard(bishop_bitboard: u64, empty: u64) u64 {
+    var attack_map: u64 = 0;
+    attack_map |= northEastAttacks(bishop_bitboard, empty);
+    attack_map |= northWestAttacks(bishop_bitboard, empty);
+    attack_map |= southEastAttacks(bishop_bitboard, empty);
+    attack_map |= southWestAttacks(bishop_bitboard, empty);
+    return attack_map;
+}
+
+pub fn generateRookAttackBitboard(rooks: u64, empty: u64) u64 {
+    var attack_map: u64 = 0;
+    attack_map |= southAttacks(rooks, empty);
+    attack_map |= northAttacks(rooks, empty);
+    attack_map |= eastAttacks(rooks, empty);
+    attack_map |= westAttacks(rooks, empty);
+    return attack_map;
+}
+
+pub fn generateQueenAttackBitboard(queen_bitboard: u64, empty: u64) u64 {
+    var attack_map: u64 = 0;
+    attack_map |= northEastAttacks(queen_bitboard, empty);
+    attack_map |= northWestAttacks(queen_bitboard, empty);
+    attack_map |= southEastAttacks(queen_bitboard, empty);
+    attack_map |= southWestAttacks(queen_bitboard, empty);
+    attack_map |= southAttacks(queen_bitboard, empty);
+    attack_map |= northAttacks(queen_bitboard, empty);
+    attack_map |= eastAttacks(queen_bitboard, empty);
+    attack_map |= westAttacks(queen_bitboard, empty);
+    return attack_map;
 }
 
 pub fn generateAttackMap(pos: *position.Position, attacker: Color) u64 {
@@ -103,14 +134,14 @@ pub fn generateAttackMap(pos: *position.Position, attacker: Color) u64 {
     //     2. The bitboard is shifted according to the algorithm, which moves the pieces in the relevant direction until
     //        they hit a non-empty square (which blocks the attack.)
     //     3. These moves are combined with the overall attack map using bitwise OR.
-    attack_map |= southAttacks(queens|rooks, empty);
-    attack_map |= northAttacks(queens|rooks, empty);
-    attack_map |= eastAttacks(queens|rooks, empty);
-    attack_map |= westAttacks(queens|rooks, empty);
-    attack_map |= northEastAttacks(queens|bishops, empty);
-    attack_map |= northWestAttacks(queens|bishops, empty);
-    attack_map |= southEastAttacks(queens|bishops, empty);
-    attack_map |= southWestAttacks(queens|bishops, empty);
+    attack_map |= southAttacks(queens | rooks, empty);
+    attack_map |= northAttacks(queens | rooks, empty);
+    attack_map |= eastAttacks(queens | rooks, empty);
+    attack_map |= westAttacks(queens | rooks, empty);
+    attack_map |= northEastAttacks(queens | bishops, empty);
+    attack_map |= northWestAttacks(queens | bishops, empty);
+    attack_map |= southEastAttacks(queens | bishops, empty);
+    attack_map |= southWestAttacks(queens | bishops, empty);
 
     // Pawn attack generation
     attack_map |= switch (attacker) {
@@ -200,7 +231,6 @@ pub fn northEastAttacks(start_const: u64, empty_const: u64) u64 {
     }
 
     return (flood << 9) & NOT_A_FILE;
-
 }
 
 pub fn northWestAttacks(start_const: u64, empty_const: u64) u64 {

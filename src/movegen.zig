@@ -4,6 +4,7 @@ const Allocator = std.mem.Allocator;
 const position = @import("./position.zig");
 const piece = @import("./piece.zig");
 const PieceType = piece.PieceType;
+const Bitboard = @import("./bitboard.zig").Bitboard;
 const Color = @import("./color.zig").Color;
 const color = @import("./color.zig");
 const Move = @import("./move.zig").Move;
@@ -11,6 +12,7 @@ const make_move = @import("./make_move.zig");
 const attack = @import("./attack.zig");
 const debug = @import("./debug.zig");
 const castling = @import("./castling.zig");
+const moveorder = @import("./moveorder.zig");
 usingnamespace @import("./bitboard_ops.zig");
 
 const AVERAGE_BRANCHING_FACTOR = 38;
@@ -74,8 +76,7 @@ pub const MoveGenerator = struct {
         self.next_to_play[self.ply] = self.next_to_generate[self.ply - 1];
 
         generateMoves(self, pos);
-
-        // TODO: ordering
+        self.orderMoves(pos);
     }
 
     // Return the remaining moves to be evaluated
@@ -98,6 +99,13 @@ pub const MoveGenerator = struct {
     fn add(self: *MoveGenerator, move: Move) void {
         self.moves[self.next_to_generate[self.ply]] = move;
         self.next_to_generate[self.ply] += 1;
+    }
+
+    // Order moves based on fitness heuristics. The quicker we see a good move,
+    // the better alpha-beta search works.
+    fn orderMoves(self: *MoveGenerator, pos: *position.Position) void {
+        const context = moveorder.buildContext(pos, self.moves[self.next_to_play[self.ply]..self.next_to_generate[self.ply]]);
+        std.sort.sort(Move, self.moves[self.next_to_play[self.ply]..self.next_to_generate[self.ply]], &context, moveorder.cmp);
     }
 };
 
@@ -123,17 +131,17 @@ fn generatePawnMoves(moves: *MoveGenerator, pos: *position.Position) !void {
     const empty = pos.board.empty();
     const pawns = pos.board.get(PieceType.pawn, pos.to_move);
 
-    var single_push = switch(pos.to_move) {
+    var single_push = switch (pos.to_move) {
         Color.white => northOne(pawns) & pos.board.empty(),
         Color.black => southOne(pawns) & pos.board.empty(),
     };
 
-    var double_push = switch(pos.to_move) {
+    var double_push = switch (pos.to_move) {
         Color.white => northOne(single_push) & empty & RANK_4,
         Color.black => southOne(single_push) & empty & RANK_5,
     };
 
-    const promotion_rank = switch(pos.to_move) {
+    const promotion_rank = switch (pos.to_move) {
         Color.white => @as(u8, 7),
         Color.black => @as(u8, 0),
     };
@@ -142,7 +150,7 @@ fn generatePawnMoves(moves: *MoveGenerator, pos: *position.Position) !void {
     // promotion moves. Otherwise generate a quiet push.
     while (single_push != 0) {
         const to = bitscanForwardAndReset(&single_push);
-        const from = switch(pos.to_move) {
+        const from = switch (pos.to_move) {
             Color.white => to - 8,
             Color.black => to + 8,
         };
@@ -160,7 +168,7 @@ fn generatePawnMoves(moves: *MoveGenerator, pos: *position.Position) !void {
     // Generate double push moves.
     while (double_push != 0) {
         const to = bitscanForwardAndReset(&double_push);
-        const from = switch(pos.to_move) {
+        const from = switch (pos.to_move) {
             Color.white => to - 16,
             Color.black => to + 16,
         };
@@ -177,17 +185,17 @@ fn generatePawnCaptures(moves: *MoveGenerator, pos: *position.Position) !void {
 
     const pawns = pos.board.get(PieceType.pawn, pos.to_move);
 
-    var east_captures = switch(pos.to_move) {
+    var east_captures = switch (pos.to_move) {
         Color.white => northEastOne(pawns) & opponent_pieces,
         Color.black => southEastOne(pawns) & opponent_pieces,
     };
 
-    var west_captures = switch(pos.to_move) {
+    var west_captures = switch (pos.to_move) {
         Color.white => northWestOne(pawns) & opponent_pieces,
         Color.black => southWestOne(pawns) & opponent_pieces,
     };
 
-    const promotion_rank = switch(pos.to_move) {
+    const promotion_rank = switch (pos.to_move) {
         Color.white => @as(u8, 7),
         Color.black => @as(u8, 0),
     };
@@ -196,7 +204,7 @@ fn generatePawnCaptures(moves: *MoveGenerator, pos: *position.Position) !void {
     // promotion capture moves. Otherwise generate a capture move.
     while (east_captures != 0) {
         const to = bitscanForwardAndReset(&east_captures);
-        const from = switch(pos.to_move) {
+        const from = switch (pos.to_move) {
             Color.white => to - 9,
             Color.black => to + 7,
         };
@@ -217,7 +225,7 @@ fn generatePawnCaptures(moves: *MoveGenerator, pos: *position.Position) !void {
 
     while (west_captures != 0) {
         const to = bitscanForwardAndReset(&west_captures);
-        const from = switch(pos.to_move) {
+        const from = switch (pos.to_move) {
             Color.white => to - 7,
             Color.black => to + 9,
         };
@@ -375,8 +383,7 @@ fn generateSlidingMoves(moves: *MoveGenerator, pos: *position.Position) !void {
 
 fn generateCastlingMoves(moves: *MoveGenerator, pos: *position.Position) !void {
     // Return early if no castling is possible; this saves the attack generation cost
-    if (!castling.hasCastlingRight(pos.castling, pos.to_move, castling.CastleSide.king)
-        and !castling.hasCastlingRight(pos.castling, pos.to_move, castling.CastleSide.queen)) {
+    if (!castling.hasCastlingRight(pos.castling, pos.to_move, castling.CastleSide.king) and !castling.hasCastlingRight(pos.castling, pos.to_move, castling.CastleSide.queen)) {
         return;
     }
 
@@ -402,19 +409,19 @@ fn generateCastlingMoves(moves: *MoveGenerator, pos: *position.Position) !void {
 // CASTLING_BLOCKS declares the indices which, if they contain a piece, can block
 // castling to that side for each colour.
 const CASTLING_BLOCKS = [4][3]u8{
-    [_]u8{5, 6, 0}, // White king
-    [_]u8{1, 2, 3}, // White queen
-    [_]u8{61, 62, 0}, // Black king
-    [_]u8{57, 58, 59}, // Black queen
+    [_]u8{ 5, 6, 0 }, // White king
+    [_]u8{ 1, 2, 3 }, // White queen
+    [_]u8{ 61, 62, 0 }, // Black king
+    [_]u8{ 57, 58, 59 }, // Black queen
 };
 
 // CASTLING_CHECKS declares the indices which, if in check, can block castling.
 // Same order as above.
 const CASTLING_CHECKS = [4][2]u8{
-    [_]u8{5, 6},
-    [_]u8{2, 3},
-    [_]u8{61, 62},
-    [_]u8{58, 59},
+    [_]u8{ 5, 6 },
+    [_]u8{ 2, 3 },
+    [_]u8{ 61, 62 },
+    [_]u8{ 58, 59 },
 };
 
 // Given a position, the side to castle (either KING_CASTLE or QUEEN_CASTLE), and an attack map from the opponent,
@@ -423,9 +430,9 @@ const CASTLING_CHECKS = [4][2]u8{
 // with the occupied and attack maps respectively
 fn clearToCastle(pos: *position.Position, side: castling.CastleSide, attack_map: u64) bool {
     const castling_index: u8 = switch (side) {
-            .king => @as(u8, 0),
-            .queen => @as(u8, 1),
-        } + if (pos.to_move == Color.black) @intCast(u8, 2) else @intCast(u8, 0);
+        .king => @as(u8, 0),
+        .queen => @as(u8, 1),
+    } + if (pos.to_move == Color.black) @intCast(u8, 2) else @intCast(u8, 0);
 
     // For each index in the potential blockers, check that there is no piece
     // present.
@@ -458,4 +465,79 @@ pub fn isKingInCheck(pos: position.Position, side: Color, attack_map: u64) bool 
     const king_index = pos.king_indices[@enumToInt(side)];
 
     return attack.isSquareAttacked(attack_map, king_index);
+}
+
+// This is useful for Static Exchange Evaluation. We want to find the lowest-valued
+// attacker who can target a particular square.
+//
+// Helpfully, attacks are symmetrical, so the key insight here is to swap the
+// attacking and defending sides, then generating attacks.
+pub fn findSmallestAttackerMove(pos: *position.Position, to: u8, side: Color) ?Move {
+    const captured_piece_type = pos.board.getPieceTypeAt(to);
+
+    // Is it a pawn? Is it a knight? Is it a slider? No, it's all of the above!
+    var super_pseudo_piece = bitboardFromIndex(to);
+
+    // Pawn attacks
+    var pawn_attack_map = switch (color.invert(side)) {
+        Color.white => attack.generateWhitePawnAttackBitboard(super_pseudo_piece),
+        Color.black => attack.generateBlackPawnAttackBitboard(super_pseudo_piece),
+    };
+
+    var attacking_pawns = pawn_attack_map & pos.board.get(PieceType.pawn, side);
+
+    if (attacking_pawns > 0) {
+        const attack_from = bitscanForwardAndReset(&attacking_pawns);
+        return Move.initCapture(attack_from, to, side, PieceType.pawn, captured_piece_type);
+    }
+
+    // Knight attacks
+    var knight_attack_map = attack.generateKnightAttackBitboard(super_pseudo_piece);
+    var attacking_knights = knight_attack_map & pos.board.get(PieceType.knight, side);
+
+    if (attacking_knights > 0) {
+        const attack_from = bitscanForwardAndReset(&attacking_knights);
+        return Move.initCapture(attack_from, to, side, PieceType.knight, captured_piece_type);
+    }
+
+    // Empty positions on the board, which sliders can move through
+    const empty: u64 = pos.board.empty();
+
+    // Bishop attacks
+    var bishop_attack_map = attack.generateBishopAttackBitboard(super_pseudo_piece, empty);
+    var attacking_bishops = bishop_attack_map & pos.board.get(PieceType.bishop, side);
+
+    if (attacking_bishops > 0) {
+        const attack_from = bitscanForwardAndReset(&attacking_bishops);
+        return Move.initCapture(attack_from, to, side, PieceType.bishop, captured_piece_type);
+    }
+
+    // Rook attacks
+    var rook_attack_map = attack.generateRookAttackBitboard(super_pseudo_piece, empty);
+    var attacking_rooks = rook_attack_map & pos.board.get(PieceType.rook, side);
+
+    if (attacking_rooks > 0) {
+        const attack_from = bitscanForwardAndReset(&attacking_rooks);
+        return Move.initCapture(attack_from, to, side, PieceType.rook, captured_piece_type);
+    }
+
+    // Queen attacks
+    var queen_attack_map = attack.generateQueenAttackBitboard(super_pseudo_piece, empty);
+    var attacking_queens = queen_attack_map & pos.board.get(PieceType.queen, side);
+
+    if (attacking_queens > 0) {
+        const attack_from = bitscanForwardAndReset(&attacking_queens);
+        return Move.initCapture(attack_from, to, side, PieceType.queen, captured_piece_type);
+    }
+
+    // King attacks
+    var king_attack_map = attack.generateKingAttackBitboard(super_pseudo_piece);
+    var attacking_kings = king_attack_map & pos.board.get(PieceType.king, side);
+
+    if (attacking_kings > 0) {
+        const attack_from = bitscanForwardAndReset(&attacking_kings);
+        return Move.initCapture(attack_from, to, side, PieceType.king, captured_piece_type);
+    }
+
+    return null;
 }
