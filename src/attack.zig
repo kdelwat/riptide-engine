@@ -120,7 +120,6 @@ pub fn generateAttackMap(pos: *position.Position, attacker: Color) u64 {
     const rooks: u64 = pos.board.get(PieceType.rook, attacker);
     const bishops: u64 = pos.board.get(PieceType.bishop, attacker);
 
-    // TODO: May need to filter this to only empty positions on attacking side?
     const empty: u64 = pos.board.empty();
 
     // Generate the attacks of all sliding pieces.
@@ -164,6 +163,62 @@ pub fn generateAttackMap(pos: *position.Position, attacker: Color) u64 {
 
 pub fn isSquareAttacked(attack_map: u64, index: u8) bool {
     return (attack_map & (@as(u64, 1) << @truncate(u6, index))) > 0;
+}
+
+// This performs the attack map generation, as above, but to answer only whether
+// a given square is being attacked. Instead of computing the full attack map,
+// we do it piece type by piece type and exit early if an attack is found.
+pub fn isSquareAttackedOnTheFly(pos: *position.Position, index: u8, attacker: Color) bool {
+    var super_pseudo_piece = bitboardFromIndex(index);
+
+    var attack_map: u64 = 0;
+
+    const queens: u64 = pos.board.get(PieceType.queen, attacker);
+    const rooks: u64 = pos.board.get(PieceType.rook, attacker);
+    const bishops: u64 = pos.board.get(PieceType.bishop, attacker);
+
+    const empty: u64 = pos.board.empty();
+
+    attack_map |= southAttacks(queens | rooks, empty);
+    attack_map |= northAttacks(queens | rooks, empty);
+    attack_map |= eastAttacks(queens | rooks, empty);
+    attack_map |= westAttacks(queens | rooks, empty);
+    attack_map |= northEastAttacks(queens | bishops, empty);
+    attack_map |= northWestAttacks(queens | bishops, empty);
+    attack_map |= southEastAttacks(queens | bishops, empty);
+    attack_map |= southWestAttacks(queens | bishops, empty);
+
+    if (attack_map & super_pseudo_piece > 0) {
+        return true;
+    }
+
+    attack_map = switch (attacker) {
+        Color.white => generateWhitePawnAttackBitboard(pos.board.get(PieceType.pawn, attacker)),
+        Color.black => generateBlackPawnAttackBitboard(pos.board.get(PieceType.pawn, attacker)),
+    };
+
+    if (attack_map & super_pseudo_piece > 0) {
+        return true;
+    }
+
+    var knights = pos.board.get(PieceType.knight, attacker);
+    while (knights != 0) {
+        const i = bitscanForwardAndReset(&knights);
+        attack_map |= KNIGHT_ATTACKS[i];
+    }
+
+    if (attack_map & super_pseudo_piece > 0) {
+        return true;
+    }
+
+    // King attack generation
+    attack_map |= KING_ATTACKS[pos.getIndexOfKing(attacker)];
+
+    if (attack_map & super_pseudo_piece > 0) {
+        return true;
+    }
+
+    return false;
 }
 
 pub fn southAttacks(start_const: u64, empty: u64) u64 {

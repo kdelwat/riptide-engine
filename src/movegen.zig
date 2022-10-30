@@ -88,15 +88,20 @@ pub const MoveGenerator = struct {
     }
 
     // Add a pseudo-legal move to the move list for the current ply, which is filtered for legality
-    fn addLegal(self: *MoveGenerator, move: Move, pos: *position.Position) void {
+    fn addPseudoLegal(self: *MoveGenerator, move: Move, pos: *position.Position) void {
         const artifacts = make_move.makeMove(pos, move);
 
-        const attack_map = attack.generateAttackMap(pos, pos.to_move);
-        if (!isKingInCheck(pos.*, color.invert(pos.to_move), attack_map)) {
+        if (!isKingInCheck(pos)) {
+            // Filter out this move, king is in check
             self.add(move);
         }
 
         make_move.unmakeMove(pos, move, artifacts);
+    }
+
+    // Add a known-legal move to the move list for the current ply
+    fn addLegal(self: *MoveGenerator, move: Move, pos: *position.Position) void {
+        self.add(move);
     }
 
     fn add(self: *MoveGenerator, move: Move) void {
@@ -160,12 +165,12 @@ fn generatePawnMoves(moves: *MoveGenerator, pos: *position.Position) !void {
         };
 
         if (isOnRank(to, promotion_rank)) {
-            moves.addLegal(Move.initPromotion(from, to, pos.to_move, PieceType.queen), pos);
-            moves.addLegal(Move.initPromotion(from, to, pos.to_move, PieceType.knight), pos);
-            moves.addLegal(Move.initPromotion(from, to, pos.to_move, PieceType.rook), pos);
-            moves.addLegal(Move.initPromotion(from, to, pos.to_move, PieceType.bishop), pos);
+            moves.addPseudoLegal(Move.initPromotion(from, to, pos.to_move, PieceType.queen), pos);
+            moves.addPseudoLegal(Move.initPromotion(from, to, pos.to_move, PieceType.knight), pos);
+            moves.addPseudoLegal(Move.initPromotion(from, to, pos.to_move, PieceType.rook), pos);
+            moves.addPseudoLegal(Move.initPromotion(from, to, pos.to_move, PieceType.bishop), pos);
         } else {
-            moves.addLegal(Move.initQuiet(from, to, pos.to_move, PieceType.pawn), pos);
+            moves.addPseudoLegal(Move.initQuiet(from, to, pos.to_move, PieceType.pawn), pos);
         }
     }
 
@@ -176,7 +181,7 @@ fn generatePawnMoves(moves: *MoveGenerator, pos: *position.Position) !void {
             Color.white => to - 16,
             Color.black => to + 16,
         };
-        moves.addLegal(Move.initDoublePawnPush(from, to, pos.to_move), pos);
+        moves.addPseudoLegal(Move.initDoublePawnPush(from, to, pos.to_move), pos);
     }
 }
 
@@ -216,14 +221,14 @@ fn generatePawnCaptures(moves: *MoveGenerator, pos: *position.Position) !void {
         const captured_piece_type = pos.board.getPieceTypeAt(to);
 
         if (isOnRank(to, promotion_rank)) {
-            moves.addLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.queen, captured_piece_type), pos);
-            moves.addLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.knight, captured_piece_type), pos);
-            moves.addLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.rook, captured_piece_type), pos);
-            moves.addLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.bishop, captured_piece_type), pos);
+            moves.addPseudoLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.queen, captured_piece_type), pos);
+            moves.addPseudoLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.knight, captured_piece_type), pos);
+            moves.addPseudoLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.rook, captured_piece_type), pos);
+            moves.addPseudoLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.bishop, captured_piece_type), pos);
         } else if (to == pos.en_passant_target) {
-            moves.addLegal(Move.initEnPassant(from, to, pos.to_move), pos);
+            moves.addPseudoLegal(Move.initEnPassant(from, to, pos.to_move), pos);
         } else {
-            moves.addLegal(Move.initCapture(from, to, pos.to_move, PieceType.pawn, captured_piece_type), pos);
+            moves.addPseudoLegal(Move.initCapture(from, to, pos.to_move, PieceType.pawn, captured_piece_type), pos);
         }
     }
 
@@ -237,14 +242,14 @@ fn generatePawnCaptures(moves: *MoveGenerator, pos: *position.Position) !void {
         const captured_piece_type = pos.board.getPieceTypeAt(to);
 
         if (isOnRank(to, promotion_rank)) {
-            moves.addLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.queen, captured_piece_type), pos);
-            moves.addLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.knight, captured_piece_type), pos);
-            moves.addLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.rook, captured_piece_type), pos);
-            moves.addLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.bishop, captured_piece_type), pos);
+            moves.addPseudoLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.queen, captured_piece_type), pos);
+            moves.addPseudoLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.knight, captured_piece_type), pos);
+            moves.addPseudoLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.rook, captured_piece_type), pos);
+            moves.addPseudoLegal(Move.initPromotionCapture(from, to, pos.to_move, PieceType.bishop, captured_piece_type), pos);
         } else if (to == pos.en_passant_target) {
-            moves.addLegal(Move.initEnPassant(from, to, pos.to_move), pos);
+            moves.addPseudoLegal(Move.initEnPassant(from, to, pos.to_move), pos);
         } else {
-            moves.addLegal(Move.initCapture(from, to, pos.to_move, PieceType.pawn, captured_piece_type), pos);
+            moves.addPseudoLegal(Move.initCapture(from, to, pos.to_move, PieceType.pawn, captured_piece_type), pos);
         }
     }
 }
@@ -265,13 +270,13 @@ fn generateKnightMoves(moves: *MoveGenerator, pos: *position.Position) !void {
 
         while (quiet != 0) {
             const to = bitscanForwardAndReset(&quiet);
-            moves.addLegal(Move.initQuiet(from, to, pos.to_move, PieceType.knight), pos);
+            moves.addPseudoLegal(Move.initQuiet(from, to, pos.to_move, PieceType.knight), pos);
         }
 
         while (captures != 0) {
             const to = bitscanForwardAndReset(&captures);
             const captured_piece_type = pos.board.getPieceTypeAt(to);
-            moves.addLegal(Move.initCapture(from, to, pos.to_move, PieceType.knight, captured_piece_type), pos);
+            moves.addPseudoLegal(Move.initCapture(from, to, pos.to_move, PieceType.knight, captured_piece_type), pos);
         }
     }
 }
@@ -287,13 +292,13 @@ fn generateKingMoves(moves: *MoveGenerator, pos: *position.Position) !void {
 
     while (quiet != 0) {
         const to = bitscanForwardAndReset(&quiet);
-        moves.addLegal(Move.initQuiet(from, to, pos.to_move, PieceType.king), pos);
+        moves.addPseudoLegal(Move.initQuiet(from, to, pos.to_move, PieceType.king), pos);
     }
 
     while (captures != 0) {
         const to = bitscanForwardAndReset(&captures);
         const captured_piece_type = pos.board.getPieceTypeAt(to);
-        moves.addLegal(Move.initCapture(from, to, pos.to_move, PieceType.king, captured_piece_type), pos);
+        moves.addPseudoLegal(Move.initCapture(from, to, pos.to_move, PieceType.king, captured_piece_type), pos);
     }
 }
 
@@ -325,13 +330,13 @@ fn generateSlidingMoves(moves: *MoveGenerator, pos: *position.Position) !void {
 
         while (quiet != 0) {
             const to = bitscanForwardAndReset(&quiet);
-            moves.addLegal(Move.initQuiet(from, to, pos.to_move, PieceType.queen), pos);
+            moves.addPseudoLegal(Move.initQuiet(from, to, pos.to_move, PieceType.queen), pos);
         }
 
         while (captures != 0) {
             const to = bitscanForwardAndReset(&captures);
             const captured_piece_type = pos.board.getPieceTypeAt(to);
-            moves.addLegal(Move.initCapture(from, to, pos.to_move, PieceType.queen, captured_piece_type), pos);
+            moves.addPseudoLegal(Move.initCapture(from, to, pos.to_move, PieceType.queen, captured_piece_type), pos);
         }
     }
 
@@ -349,13 +354,13 @@ fn generateSlidingMoves(moves: *MoveGenerator, pos: *position.Position) !void {
 
         while (quiet != 0) {
             const to = bitscanForwardAndReset(&quiet);
-            moves.addLegal(Move.initQuiet(from, to, pos.to_move, PieceType.rook), pos);
+            moves.addPseudoLegal(Move.initQuiet(from, to, pos.to_move, PieceType.rook), pos);
         }
 
         while (captures != 0) {
             const to = bitscanForwardAndReset(&captures);
             const captured_piece_type = pos.board.getPieceTypeAt(to);
-            moves.addLegal(Move.initCapture(from, to, pos.to_move, PieceType.rook, captured_piece_type), pos);
+            moves.addPseudoLegal(Move.initCapture(from, to, pos.to_move, PieceType.rook, captured_piece_type), pos);
         }
     }
 
@@ -374,13 +379,13 @@ fn generateSlidingMoves(moves: *MoveGenerator, pos: *position.Position) !void {
 
         while (quiet != 0) {
             const to = bitscanForwardAndReset(&quiet);
-            moves.addLegal(Move.initQuiet(from, to, pos.to_move, PieceType.bishop), pos);
+            moves.addPseudoLegal(Move.initQuiet(from, to, pos.to_move, PieceType.bishop), pos);
         }
 
         while (captures != 0) {
             const to = bitscanForwardAndReset(&captures);
             const captured_piece_type = pos.board.getPieceTypeAt(to);
-            moves.addLegal(Move.initCapture(from, to, pos.to_move, PieceType.bishop, captured_piece_type), pos);
+            moves.addPseudoLegal(Move.initCapture(from, to, pos.to_move, PieceType.bishop, captured_piece_type), pos);
         }
     }
 }
@@ -395,8 +400,9 @@ fn generateCastlingMoves(moves: *MoveGenerator, pos: *position.Position) !void {
     // check
     const attack_map = pos.generateAttackMap(color.invert(pos.to_move));
 
-    // TODO: can do a faster check here? That doesn't involve creating an attack map if not necessary
-    if (isKingInCheck(pos.*, pos.to_move, attack_map)) {
+    const king_index = pos.king_indices[@enumToInt(pos.to_move)];
+
+    if (attack.isSquareAttacked(attack_map, king_index)) {
         return;
     }
 
@@ -465,10 +471,11 @@ fn clearToCastle(pos: *position.Position, side: castling.CastleSide, attack_map:
     return true;
 }
 
-pub fn isKingInCheck(pos: position.Position, side: Color, attack_map: u64) bool {
-    const king_index = pos.king_indices[@enumToInt(side)];
+// Check if a king is in check, from the perspective of the attacking side
+pub fn isKingInCheck(pos: *position.Position) bool {
+    const king_index = pos.king_indices[@enumToInt(color.invert(pos.to_move))];
 
-    return attack.isSquareAttacked(attack_map, king_index);
+    return attack.isSquareAttackedOnTheFly(pos, king_index, pos.to_move);
 }
 
 // This is useful for Static Exchange Evaluation. We want to find the lowest-valued
