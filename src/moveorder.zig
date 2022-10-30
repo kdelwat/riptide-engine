@@ -13,15 +13,23 @@ const position = @import("./position.zig");
 
 const MOVE_METADATA_ARRAY_SIZE = 64 * 64;
 
+const MoveOrder = enum(u4) {
+    pv = 0,
+    capture = 1,
+    other = 2,
+};
+
 const MoveEvaluation = struct {
+    order: MoveOrder,
     see_value: ?i64,
 };
 
 pub const MoveOrderer = struct {
     moves: [MOVE_METADATA_ARRAY_SIZE]MoveEvaluation,
+    pv: ?Move,
 
     pub fn init() MoveOrderer {
-        var orderer = MoveOrderer{ .moves = undefined };
+        var orderer = MoveOrderer{ .moves = undefined, .pv = null };
 
         orderer.clear();
 
@@ -30,9 +38,16 @@ pub const MoveOrderer = struct {
 
     pub fn preprocess(self: *MoveOrderer, pos: *position.Position, moves: []Move) void {
         for (moves) |m| {
-            if (m.move_type == move.MoveType.capture) {
+            if (self.pv) |known_pv| {
+                if (m.eq(known_pv)) {
+                    self.moves[self.see_index(m)].order = MoveOrder.pv;
+                }
+            } else if (m.move_type == move.MoveType.capture) {
                 const see_value = evaluateCapture(pos, m);
                 self.moves[self.see_index(m)].see_value = see_value;
+                self.moves[self.see_index(m)].order = MoveOrder.capture;
+            } else {
+                self.moves[self.see_index(m)].order = MoveOrder.other;
             }
         }
     }
@@ -41,17 +56,21 @@ pub const MoveOrderer = struct {
         var i: u64 = 0;
 
         while (i < MOVE_METADATA_ARRAY_SIZE) {
-            self.moves[i] = MoveEvaluation{ .see_value = null };
+            self.moves[i] = MoveEvaluation{ .see_value = null, .order = MoveOrder.other };
             i += 1;
         }
     }
 
-    pub fn get_see(self: *MoveOrderer, m: Move) ?i64 {
-        return self.moves[self.see_index(m)].see_value;
+    pub fn getEvaluation(self: *MoveOrderer, m: Move) MoveEvaluation {
+        return self.moves[self.see_index(m)];
     }
 
     fn see_index(self: *MoveOrderer, m: Move) usize {
         return @intCast(usize, m.from) * 64 + @intCast(usize, m.to);
+    }
+
+    pub fn setPV(self: *MoveOrderer, pv: ?Move) void {
+        self.pv = pv;
     }
 };
 
@@ -64,20 +83,18 @@ pub fn buildContext(pos: *position.Position, orderer: *MoveOrderer) MoveOrderCon
 }
 
 pub fn cmp(context: *const MoveOrderContext, a: Move, b: Move) bool {
-    // Order captures first
-    if (a.move_type == move.MoveType.capture and b.move_type != move.MoveType.capture) {
-        return true;
-    }
+    const eval_a = context.orderer.getEvaluation(a);
+    const eval_b = context.orderer.getEvaluation(b);
 
-    if (a.move_type == move.MoveType.capture and b.move_type == move.MoveType.capture) {
-        const a_see = context.orderer.get_see(a) orelse unreachable;
-        const b_see = context.orderer.get_see(b) orelse unreachable;
+    if (eval_a.order == MoveOrder.capture and eval_b.order == MoveOrder.capture) {
+        const a_see = eval_a.see_value orelse unreachable;
+        const b_see = eval_b.see_value orelse unreachable;
 
         // Order by descending SEE value
         return a_see > b_see;
     }
 
-    return @intCast(u4, @enumToInt(a.move_type)) < @intCast(u4, @enumToInt(b.move_type));
+    return @intCast(u4, @enumToInt(eval_a.order)) < @intCast(u4, @enumToInt(eval_b.order));
 }
 
 // Use static exchange evaluation to determine a value for a capture

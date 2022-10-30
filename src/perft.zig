@@ -15,16 +15,16 @@ const attack = @import("./attack.zig");
 // correctly.
 
 pub const PerftResults = struct {
-    nodes           : u64,
-    quiet           : u64,
-    captures        : u64,
-    enpassant       : u64,
-    promotion       : u64,
-    promo_capture    : u64,
-    castle_king_side  : u64,
-    castle_queen_side : u64,
-    pawn_jump        : u64,
-    checks          : u64,
+    nodes: u64,
+    quiet: u64,
+    captures: u64,
+    enpassant: u64,
+    promotion: u64,
+    promo_capture: u64,
+    castle_king_side: u64,
+    castle_queen_side: u64,
+    pawn_jump: u64,
+    checks: u64,
 };
 
 // Run a perft analysis of the position to the given depth. This function is

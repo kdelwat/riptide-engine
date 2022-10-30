@@ -1,6 +1,7 @@
 const std = @import("std");
 const File = std.fs.File;
 const position = @import("./position.zig");
+const PVTable = @import("./pv.zig").PVTable;
 const parse_uci = @import("./parse/uci.zig").uci_command;
 const uci = @import("./uci.zig");
 const algebraic = @import("./parse/algebraic.zig");
@@ -143,17 +144,13 @@ fn handleCommand(input: []const u8, logger: Logger, a: *Allocator) !bool {
         },
 
         UciCommandType.position_startpos => |moves| {
-            startNewGame(start_position, a);
+            startNewGame(position.fromFEN(start_position, a) catch unreachable, a);
         },
 
-        UciCommandType.ucinewgame => startNewGame(start_position, a),
+        UciCommandType.ucinewgame => startNewGame(position.fromFEN(start_position, a) catch unreachable, a),
 
         UciCommandType.position => |pos| {
-            engine_data = GlobalData{
-                .pos = position.fromFENStruct(pos.fen),
-                .best_move = null,
-                .stats = search.SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 },
-            };
+            startNewGame(position.fromFENStruct(pos.fen), a);
         },
 
         UciCommandType.debug => |enabled| debug_mode = enabled,
@@ -167,9 +164,9 @@ fn handleCommand(input: []const u8, logger: Logger, a: *Allocator) !bool {
     return false;
 }
 
-fn startNewGame(pos: []const u8, a: *Allocator) void {
+fn startNewGame(pos: position.Position, a: *Allocator) void {
     engine_data = GlobalData{
-        .pos = position.fromFEN(start_position, a) catch unreachable,
+        .pos = pos,
         .best_move = null,
         .stats = search.SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 },
     };
@@ -234,7 +231,9 @@ fn startAnalysis(options: []GoOption, logger: Logger, a: *Allocator) !void {
         switch (opts.search_mode) {
             SearchMode.depth => {
                 var should_cancel: bool = false;
-                const best_move = search.search(&engine_data.pos, opts.depth, -100000, 100000, search.SearchContext{ .a = a, .cancelled = &should_cancel, .logger = logger, .stats = &engine_data.stats });
+
+                var pv = PVTable.init();
+                const best_move = search.search(&engine_data.pos, &pv, opts.depth, -search.INFINITY, search.INFINITY, search.SearchContext{ .a = a, .cancelled = &should_cancel, .logger = logger, .stats = &engine_data.stats });
                 try sendBestMove(best_move, logger);
             },
             SearchMode.mate => {},

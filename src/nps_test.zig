@@ -2,6 +2,7 @@ const position = @import("./position.zig");
 const perft = @import("./perft.zig").perft;
 const search = @import("./search.zig");
 const logger = @import("./logger.zig");
+const PVTable = @import("./pv.zig").PVTable;
 const std = @import("std");
 const expect = std.testing.expect;
 const test_allocator = std.testing.allocator;
@@ -39,7 +40,9 @@ test "search efficiency (single tree)" {
     var l = logger.Logger.init();
     var stats = search.SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 };
 
-    _ = search.search(start_pos, 5, -search.INFINITY, search.INFINITY, search.SearchContext{ .cancelled = &ctx_cancelled, .logger = l, .a = test_allocator, .stats = &stats });
+    var pv = PVTable.init();
+
+    _ = search.search(start_pos, &pv, 6, -search.INFINITY, search.INFINITY, search.SearchContext{ .cancelled = &ctx_cancelled, .logger = l, .a = test_allocator, .stats = &stats });
 
     std.debug.print("Nodes visited single search: {}/{}\n", .{ stats.nodes_visited, 4865609 });
     std.debug.print("Nodes evaluated single search: {}/{}\n", .{ stats.nodes_evaluated, 4865609 });
@@ -52,7 +55,7 @@ test "search efficiency (iterative deepening)" {
     var l = logger.Logger.init();
     var stats = search.SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 };
 
-    _ = search.searchUntilDepth(start_pos, 5, search.SearchContext{ .cancelled = &ctx_cancelled, .logger = l, .a = test_allocator, .stats = &stats });
+    _ = search.searchUntilDepth(start_pos, 6, search.SearchContext{ .cancelled = &ctx_cancelled, .logger = l, .a = test_allocator, .stats = &stats });
 
     const tree_nodes =
         20 +

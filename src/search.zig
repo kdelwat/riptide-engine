@@ -1,5 +1,6 @@
 const position = @import("./position.zig");
 const MoveGenerator = @import("./movegen.zig").MoveGenerator;
+const PVTable = @import("./pv.zig").PVTable;
 const make_move = @import("./make_move.zig");
 const Move = @import("./move.zig").Move;
 const evaluate = @import("./evaluate.zig");
@@ -34,15 +35,17 @@ pub fn searchInfinite(context: InfiniteSearchContext) !void {
     const alpha: i64 = -INFINITY;
     const beta: i64 = INFINITY;
 
-    var depth: u64 = 0;
+    var depth: u64 = 1;
 
     try context.thread_ctx.logger.log("SEARCH", "thread started", .{});
+
+    var pv = PVTable.init();
 
     var timer = try Timer.start();
     while (true) {
         try context.thread_ctx.logger.log("SEARCH", "searching: depth = {}", .{depth});
 
-        const result = search(context.pos, depth, alpha, beta, context.thread_ctx);
+        const result = search(context.pos, &pv, depth, alpha, beta, context.thread_ctx);
 
         try context.thread_ctx.logger.log(
             "SEARCH",
@@ -67,51 +70,23 @@ pub fn searchUntilDepth(pos: *position.Position, max_depth: u64, context: Search
     const alpha: i64 = -INFINITY;
     const beta: i64 = INFINITY;
 
-    var depth: u64 = 0;
+    var depth: u64 = 1;
+    var pv = PVTable.init();
 
     while (depth <= max_depth) {
-        const result = search(pos, depth, alpha, beta, context);
+        const result = search(pos, &pv, depth, alpha, beta, context);
 
         depth += 1;
     }
 }
 
 // Search for the best move for a position, to a given depth.
-pub fn search(pos: *position.Position, depth: u64, alpha: i64, beta: i64, ctx: SearchContext) ?Move {
-    // Log the starting position of the search
-    //    var debug_buf = std.ArrayList(u8).init(ctx.a);
-    //    defer debug_buf.deinit();
-    //    debug.toFEN(pos.*, &debug_buf) catch unreachable;
-    //    ctx.logger.log("SEARCH", "\tposition = {s}, depth = {}, alpha = {}, beta = {}", .{debug_buf.items, depth, alpha, beta}) catch unreachable;
-
-    // Generate all legal moves for the current position.
+pub fn search(pos: *position.Position, pv: *PVTable, depth: u64, alpha: i64, beta: i64, ctx: SearchContext) ?Move {
     var gen = MoveGenerator.init();
-    gen.generate(pos);
 
-    ctx.logger.log("SEARCH", "\tgenerated starting moves: n = {}", .{gen.count()}) catch unreachable;
+    _ = alphaBeta(pos, &gen, pv, alpha, beta, depth, 0, ctx) catch {};
 
-    var best_score: i64 = -100000;
-    var best_move: ?Move = null;
-
-    // For each move available, run a search of its tree to the given depth, to
-    // identify the best outcome.
-    while (gen.next()) |m| {
-        if (ctx.cancelled.*) {
-            break;
-        }
-
-        const artifacts = make_move.makeMove(pos, m);
-        const negamax_score: i64 = -alphaBeta(pos, &gen, alpha, beta, depth, ctx);
-
-        if (negamax_score >= best_score) {
-            best_score = negamax_score;
-            best_move = m;
-        }
-
-        make_move.unmakeMove(pos, m, artifacts);
-    }
-
-    return best_move;
+    return pv.get(0);
 }
 
 // Run a negamax search of the move tree from a given position, to a given
@@ -122,8 +97,16 @@ pub fn search(pos: *position.Position, depth: u64, alpha: i64, beta: i64, ctx: S
 // candidate.
 // This function was implemented from the pseudocode at
 // https://chessprogramming.wikispaces.com/Alpha-Beta.
-fn alphaBeta(pos: *position.Position, gen: *MoveGenerator, alpha: i64, beta: i64, depth: u64, ctx: SearchContext) i64 {
+const AlphaBetaError = error{Cancelled};
+
+fn alphaBeta(pos: *position.Position, gen: *MoveGenerator, pv: *PVTable, alpha: i64, beta: i64, depth: u64, ply: u64, ctx: SearchContext) AlphaBetaError!i64 {
+    if (ctx.cancelled.*) {
+        return AlphaBetaError.Cancelled;
+    }
+
     ctx.stats.nodes_visited += 1;
+
+    // std.debug.warn("AB: ply = {}, alpha = {}, beta = {}", .{ ply, alpha, beta });
 
     // At the bottom of the tree, return the score of the position for the attacking player.
     if (depth == 0) {
@@ -136,12 +119,14 @@ fn alphaBeta(pos: *position.Position, gen: *MoveGenerator, alpha: i64, beta: i64
     // Otherwise, generate all possible moves.
     gen.generate(pos);
 
+    gen.orderer.setPV(pv.get(ply));
+
     while (gen.next()) |m| {
         // Make the move.
         const artifacts = make_move.makeMove(pos, m);
 
         // Recursively call the search function to determine the move's score.
-        const score: i64 = -alphaBeta(pos, gen, -beta, -new_alpha, depth - 1, ctx);
+        const score: i64 = -(try alphaBeta(pos, gen, pv, -beta, -new_alpha, depth - 1, ply + 1, ctx));
 
         // If the score is higher than the beta cutoff, the rest of the search
         // tree is irrelevant and the cutoff is returned.
@@ -154,6 +139,9 @@ fn alphaBeta(pos: *position.Position, gen: *MoveGenerator, alpha: i64, beta: i64
         // Otherwise, replace the alpha if the new score is higher.
         if (score > new_alpha) {
             new_alpha = score;
+
+            // This is the new best move / principal variation
+            pv.set(ply, m);
         }
 
         // Restore the pre-move state of the board.

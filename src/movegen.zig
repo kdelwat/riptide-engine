@@ -16,7 +16,7 @@ const moveorder = @import("./moveorder.zig");
 usingnamespace @import("./bitboard_ops.zig");
 
 const AVERAGE_BRANCHING_FACTOR = 38;
-const MAX_DEPTH = 20;
+pub const MAX_DEPTH = 20;
 const MOVE_ARRAY_SIZE = AVERAGE_BRANCHING_FACTOR * MAX_DEPTH;
 
 // The move generator is responsible for legal move generation at each ply of a search
