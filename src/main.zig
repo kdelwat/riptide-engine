@@ -233,8 +233,12 @@ fn startAnalysis(options: []GoOption, logger: Logger, a: *Allocator) !void {
                 var should_cancel: bool = false;
 
                 var pv = PVTable.init();
-                const best_move = search.search(&engine_data.pos, &pv, opts.depth, -search.INFINITY, search.INFINITY, search.SearchContext{ .a = a, .cancelled = &should_cancel, .logger = logger, .stats = &engine_data.stats });
-                try sendBestMove(best_move, logger);
+                const res = search.search(&engine_data.pos, &pv, opts.depth, -search.INFINITY, search.INFINITY, search.SearchContext{ .a = a, .cancelled = &should_cancel, .logger = logger, .stats = &engine_data.stats });
+                if (res) |r| {
+                    try sendBestMove(r.move, logger);
+                } else {
+                    try sendBestMove(null, logger);
+                }
             },
             SearchMode.mate => {},
             SearchMode.ponder => {},

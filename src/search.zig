@@ -13,6 +13,7 @@ const Timer = std.time.Timer;
 const Logger = @import("./logger.zig").Logger;
 
 pub const INFINITY = 100000;
+pub const ASPIRATION_WINDOW = 100; // One pawn
 
 // Runs a search for the best move.
 // searchInfinite uses iterative deepening. It will search to a progressively greater
@@ -31,9 +32,13 @@ pub const SearchStats = struct {
     nodes_evaluated: u64, nodes_visited: u64
 };
 
+// Infinite search uses an iterative deepening approach. Searches are performed at
+// progressively greater depths, until time runs out.
+// Based on the result from the prevous iteration, alpha and beta are estimated
+// for the next search, which theoretically leads to a more efficient search tree.
 pub fn searchInfinite(context: InfiniteSearchContext) !void {
-    const alpha: i64 = -INFINITY;
-    const beta: i64 = INFINITY;
+    var alpha: i64 = -INFINITY;
+    var beta: i64 = INFINITY;
 
     var depth: u64 = 1;
 
@@ -42,10 +47,12 @@ pub fn searchInfinite(context: InfiniteSearchContext) !void {
     var pv = PVTable.init();
 
     var timer = try Timer.start();
+
+    var result: ?SearchResult = null;
     while (true) {
         try context.thread_ctx.logger.log("SEARCH", "searching: depth = {}", .{depth});
 
-        const result = search(context.pos, &pv, depth, alpha, beta, context.thread_ctx);
+        result = search(context.pos, &pv, depth, alpha, beta, context.thread_ctx);
 
         try context.thread_ctx.logger.log(
             "SEARCH",
@@ -59,7 +66,17 @@ pub fn searchInfinite(context: InfiniteSearchContext) !void {
         }
 
         if (result) |best_move| {
-            context.best_move.* = best_move;
+            if (best_move.score <= alpha or best_move.score >= beta) {
+                // Aspiration window missed; do a full re-search
+                std.debug.print("Missed aspiration window at depth {}\n", .{depth});
+                alpha = -INFINITY;
+                beta = INFINITY;
+                continue;
+            } else {
+                alpha = best_move.score - ASPIRATION_WINDOW;
+                beta = best_move.score + ASPIRATION_WINDOW;
+                context.best_move.* = best_move.move;
+            }
         }
 
         depth += 1;
@@ -67,8 +84,8 @@ pub fn searchInfinite(context: InfiniteSearchContext) !void {
 }
 
 pub fn searchUntilDepth(pos: *position.Position, max_depth: u64, context: SearchContext) void {
-    const alpha: i64 = -INFINITY;
-    const beta: i64 = INFINITY;
+    var alpha: i64 = -INFINITY;
+    var beta: i64 = INFINITY;
 
     var depth: u64 = 1;
     var pv = PVTable.init();
@@ -76,17 +93,39 @@ pub fn searchUntilDepth(pos: *position.Position, max_depth: u64, context: Search
     while (depth <= max_depth) {
         const result = search(pos, &pv, depth, alpha, beta, context);
 
+        if (result) |best_move| {
+            if (best_move.score <= alpha or best_move.score >= beta) {
+                // Aspiration window missed; do a full re-search
+                alpha = -INFINITY;
+                beta = INFINITY;
+                continue;
+            } else {
+                alpha = best_move.score - ASPIRATION_WINDOW;
+                beta = best_move.score + ASPIRATION_WINDOW;
+            }
+        }
+
         depth += 1;
     }
 }
 
 // Search for the best move for a position, to a given depth.
-pub fn search(pos: *position.Position, pv: *PVTable, depth: u64, alpha: i64, beta: i64, ctx: SearchContext) ?Move {
+const SearchResult = struct {
+    move: Move, score: i64
+};
+
+pub fn search(pos: *position.Position, pv: *PVTable, depth: u64, alpha: i64, beta: i64, ctx: SearchContext) ?SearchResult {
     var gen = MoveGenerator.init();
 
-    _ = alphaBeta(pos, &gen, pv, alpha, beta, depth, 0, ctx) catch {};
+    var score = alphaBeta(pos, &gen, pv, alpha, beta, depth, 0, ctx) catch {
+        return null;
+    };
 
-    return pv.get(0);
+    if (pv.get(0)) |best_move| {
+        return SearchResult{ .move = best_move, .score = score };
+    } else {
+        return null;
+    }
 }
 
 // Run a negamax search of the move tree from a given position, to a given
