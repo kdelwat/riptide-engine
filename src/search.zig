@@ -215,8 +215,6 @@ fn quiesce(pos: *position.Position, gen: *MoveGenerator, pv: *PVTable, alpha: i6
             continue;
         }
 
-        // TODO: skip if SEE < 0
-
         // Make the move.
         const artifacts = make_move.makeMove(pos, m);
 
