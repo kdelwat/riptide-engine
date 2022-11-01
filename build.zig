@@ -14,6 +14,7 @@ pub fn build(b: *Builder) void {
     const exe = b.addExecutable("riptide", "src/main.zig");
 
     exe.addPackagePath("mecha", "libs/mecha/mecha.zig");
+    exe.addPackagePath("position", "src/position.zig");
 
     exe.setTarget(target);
     exe.setBuildMode(mode);
@@ -30,13 +31,14 @@ pub fn build(b: *Builder) void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
-    const test_files: [6][]const u8 = [_][]const u8{
+    const test_files: [7][]const u8 = [_][]const u8{
         "src/move_test.zig",
         "src/movegen_test.zig",
         "src/attack_test.zig",
         "src/position_test.zig",
         "src/evaluate_test.zig",
         "src/make_move_test.zig",
+        "src/transposition/zobrist_test.zig",
     };
 
     const test_step = b.step("test", "Run all tests");
@@ -45,6 +47,7 @@ pub fn build(b: *Builder) void {
         const test_target = b.addTest(test_file);
         test_target.use_stage1 = true;
         test_target.addPackagePath("mecha", "libs/mecha/mecha.zig");
+        test_target.addPackagePath("position", "src/position.zig");
         test_step.dependOn(&test_target.step);
     }
 

@@ -11,6 +11,7 @@ const fen = @import("./parse/fen.zig");
 const Move = @import("./move.zig").Move;
 const search = @import("./search.zig");
 const worker = @import("./worker.zig");
+const TranspositionTable = @import("./transposition/TranspositionTable.zig").TranspositionTable;
 const Allocator = std.mem.Allocator;
 const test_allocator = std.testing.allocator;
 const Logger = @import("./logger.zig").Logger;
@@ -21,11 +22,9 @@ const start_position = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
 // Store the current position and current best move of the engine, used globally
 // to ensure that search can continue in the background while the engine
 // continue to receive commands.
-const GlobalData = struct {
-    pos: position.Position,
-    best_move: ?Move,
-};
+const GlobalData = struct { pos: position.Position, best_move: ?Move, transposition_table: TranspositionTable };
 
+var has_engine_data: bool = false;
 var engine_data: GlobalData = undefined;
 
 const SearchMode = enum {
@@ -144,16 +143,13 @@ fn handleCommand(input: []const u8, logger: Logger, a: Allocator) !bool {
         },
 
         UciCommandType.position_startpos => |_| {
-            startNewGame(start_position, a);
+            try startNewGame(a, null);
         },
 
-        UciCommandType.ucinewgame => startNewGame(start_position, a),
+        UciCommandType.ucinewgame => try startNewGame(a, null),
 
         UciCommandType.position => |pos| {
-            engine_data = GlobalData{
-                .pos = position.fromFENStruct(pos.fen),
-                .best_move = null,
-            };
+            try startNewGame(a, pos.fen);
         },
 
         UciCommandType.debug => |enabled| debug_mode = enabled,
@@ -167,11 +163,22 @@ fn handleCommand(input: []const u8, logger: Logger, a: Allocator) !bool {
     return false;
 }
 
-fn startNewGame(_: []const u8, a: Allocator) void {
-    engine_data = GlobalData{
-        .pos = position.fromFEN(start_position, a) catch unreachable,
-        .best_move = null,
-    };
+fn startNewGame(a: Allocator, initial_pos: ?fen.Fen) !void {
+    if (has_engine_data) {
+        engine_data.transposition_table.deinit();
+    }
+
+    engine_data = GlobalData{ .pos = try makePosition(a, initial_pos), .best_move = null, .transposition_table = try TranspositionTable.init(a) };
+
+    has_engine_data = true;
+}
+
+fn makePosition(a: Allocator, f: ?fen.Fen) !position.Position {
+    if (f) |p| {
+        return position.fromFENStruct(p);
+    } else {
+        return try position.fromFEN(start_position, a);
+    }
 }
 
 fn startAnalysis(options: []GoOption, logger: Logger, a: Allocator) !void {

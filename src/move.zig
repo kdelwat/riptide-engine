@@ -22,17 +22,18 @@ pub const MoveType = enum(u4) {
     queen_promo_capture = 0b1111,
 };
 
+// Move is a
 pub const Move = struct {
-    piece_color: Color,
-    piece_type: PieceType,
-
-    captured_piece_type: ?PieceType = null,
-    captured_piece_color: ?Color = null,
+    from: u8,
+    to: u8,
 
     move_type: MoveType = MoveType.quiet,
 
-    from: u8,
-    to: u8,
+    piece_type: PieceType,
+    captured_piece_type: ?PieceType = null,
+
+    piece_color: Color,
+    captured_piece_color: ?Color = null,
 
     pub fn initQuiet(from: u8, to: u8, piece_color: Color, piece_type: PieceType) Move {
         return Move{
