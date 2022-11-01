@@ -3,6 +3,7 @@ const MoveGenerator = @import("./movegen.zig").MoveGenerator;
 const PVTable = @import("./pv.zig").PVTable;
 const make_move = @import("./make_move.zig");
 const Move = @import("./move.zig").Move;
+const move = @import("./move.zig");
 const evaluate = @import("./evaluate.zig");
 const debug = @import("./debug.zig");
 const std = @import("std");
@@ -150,7 +151,7 @@ fn alphaBeta(pos: *position.Position, gen: *MoveGenerator, pv: *PVTable, alpha: 
     // At the bottom of the tree, return the score of the position for the attacking player.
     if (depth == 0) {
         ctx.stats.nodes_evaluated += 1;
-        return evaluate.evaluate(pos);
+        return quiesce(pos, gen, pv, alpha, beta);
     }
 
     var new_alpha: i64 = alpha;
@@ -181,6 +182,58 @@ fn alphaBeta(pos: *position.Position, gen: *MoveGenerator, pv: *PVTable, alpha: 
 
             // This is the new best move / principal variation
             pv.set(ply, m);
+        }
+
+        // Restore the pre-move state of the board.
+        make_move.unmakeMove(pos, m, artifacts);
+    }
+
+    return new_alpha;
+}
+
+fn quiesce(pos: *position.Position, gen: *MoveGenerator, pv: *PVTable, alpha: i64, beta: i64) i64 {
+    const stand_pat = evaluate.evaluate(pos);
+
+    if (stand_pat >= beta) {
+        return beta;
+    }
+
+    var new_alpha: i64 = alpha;
+    if (alpha < stand_pat) {
+        new_alpha = stand_pat;
+    }
+
+    // Generate all possible moves.
+    gen.generate(pos);
+
+    // Don't use the PV
+    gen.orderer.setPV(null);
+
+    // Loop through captures
+    while (gen.next()) |m| {
+        if (m.move_type != move.MoveType.capture) {
+            continue;
+        }
+
+        // TODO: skip if SEE < 0
+
+        // Make the move.
+        const artifacts = make_move.makeMove(pos, m);
+
+        // Recursively call the search function to determine the move's score.
+        const score: i64 = -quiesce(pos, gen, pv, -beta, -new_alpha);
+
+        // If the score is higher than the beta cutoff, the rest of the search
+        // tree is irrelevant and the cutoff is returned.
+        if (score >= beta) {
+            make_move.unmakeMove(pos, m, artifacts);
+            gen.cutoff();
+            return beta;
+        }
+
+        // Otherwise, replace the alpha if the new score is higher.
+        if (score > new_alpha) {
+            new_alpha = score;
         }
 
         // Restore the pre-move state of the board.

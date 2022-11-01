@@ -16,7 +16,7 @@ const moveorder = @import("./moveorder.zig");
 usingnamespace @import("./bitboard_ops.zig");
 
 const AVERAGE_BRANCHING_FACTOR = 38;
-pub const MAX_DEPTH = 20;
+pub const MAX_DEPTH = 40;
 const MOVE_ARRAY_SIZE = AVERAGE_BRANCHING_FACTOR * MAX_DEPTH;
 
 // The move generator is responsible for legal move generation at each ply of a search
@@ -73,6 +73,7 @@ pub const MoveGenerator = struct {
     pub fn generate(self: *MoveGenerator, pos: *position.Position) void {
         // Calling generate will increase the ply by 1, since it's called for each level of the alpha-beta search
         self.ply += 1;
+        std.debug.print("ply: {}\n", .{self.ply});
 
         // Set move pointers to the last value before generation
         self.next_to_generate[self.ply] = self.next_to_generate[self.ply - 1];

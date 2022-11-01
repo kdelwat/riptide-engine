@@ -7,5 +7,7 @@ latest           981   1908866   2253272    91.60s        3174384        3523939
 latest          1103   1850345   2280126    95.09s         533341         624833         678897         790681  | Principal variation table and ordering; incremental infinite search
 latest          1098   1836759   2273160    95.27s         533341         624833         678897         790681  | Update isKingInCheck
 latest          1136   1857263   2259354    95.49s         533341         624833         853673        1001802  | Aspiration windows
+latest          1546   1500597   2254461   120.34s        1018272        1162814        1176782        1342280  | Quiescence search
+
 
 
