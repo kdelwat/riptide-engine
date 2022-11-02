@@ -20,6 +20,7 @@ test "fromFEN - empty board" {
         .halfmove = 0,
         .fullmove = 1,
         .king_indices = [2]u8{ 0, 0 },
+        .hash = 0,
     }));
 }
 
@@ -32,6 +33,7 @@ test "fromFEN - empty board with other data variety" {
         .halfmove = 36,
         .fullmove = 113,
         .king_indices = [2]u8{ 0, 0 },
+        .hash = 0,
     }));
 }
 
@@ -44,6 +46,7 @@ test "fromFEN - bug" {
         .halfmove = 1,
         .fullmove = 2,
         .king_indices = [2]u8{ 0, 0 },
+        .hash = 0,
     }));
 }
 
@@ -65,5 +68,6 @@ test "fromFEN - starting board" {
         .halfmove = 0,
         .fullmove = 1,
         .king_indices = [2]u8{ 4, 60 },
+        .hash = 0,
     }));
 }

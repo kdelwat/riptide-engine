@@ -9,3 +9,5 @@ pub fn invert(c: Color) Color {
         Color.black => Color.white,
     };
 }
+
+pub const ALL_COLORS: [2]Color = .{ .white, .black };

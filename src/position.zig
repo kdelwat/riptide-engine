@@ -10,6 +10,7 @@ const CanCastle = @import("./castling.zig").CanCastle;
 const attack = @import("./attack.zig");
 const Allocator = std.mem.Allocator;
 const b = @import("./bitboard_ops.zig");
+const zobrist = @import("Zobrist.zig");
 
 // Position contains the complete game state after a turn.
 pub const Position = struct {
@@ -32,6 +33,9 @@ pub const Position = struct {
     // halfmove and fullmove represent the time elapsed in the game.
     halfmove: u64,
     fullmove: u64,
+
+    // the Zobrist hash of the position
+    hash: u64,
 
     // Equality with another position
     pub fn eq(self: Position, other: Position) bool {
@@ -156,15 +160,10 @@ pub fn fromFENStruct(fen: Fen) Position {
         en_passant_target = bitboardIndex(file, rank);
     }
 
-    return Position{
-        .board = board,
-        .to_move = to_move,
-        .castling = castling,
-        .en_passant_target = en_passant_target,
-        .halfmove = fen.halfmove,
-        .fullmove = fen.fullmove,
-        .king_indices = king_indices,
-    };
+    // Hash
+    const initial_hash = zobrist.hash(&board, castling, to_move, en_passant_target);
+
+    return Position{ .board = board, .to_move = to_move, .castling = castling, .en_passant_target = en_passant_target, .halfmove = fen.halfmove, .fullmove = fen.fullmove, .king_indices = king_indices, .hash = initial_hash };
 }
 
 // Convert a FEN piece code (e.g. p) to the piece type

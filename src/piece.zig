@@ -7,3 +7,5 @@ pub const PieceType = enum(u4) {
     queen = 6,
     king = 7,
 };
+
+pub const ALL_PIECE_TYPES: [7]PieceType = .{ .empty, .pawn, .knight, .bishop, .rook, .queen, .king };

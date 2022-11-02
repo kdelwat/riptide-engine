@@ -1,5 +1,5 @@
 const std = @import("std");
-const Zobrist = @import("./Zobrist.zig").Zobrist;
+const zobrist = @import("Zobrist.zig");
 const Position = @import("position.zig").Position;
 const position = @import("position.zig");
 const testing = std.testing;
@@ -10,8 +10,7 @@ fn initPos(f: []const u8) Position {
 }
 
 test "zobrist hashing" {
-    var zobrist = Zobrist.init(1);
     var pos = initPos("8/8/8/8/8/8/8/8 w KQkq - 0 1");
 
-    try testing.expectEqual(zobrist.hash(pos), 1);
+    try testing.expectEqual(zobrist.hash(&pos.board, pos.castling, pos.to_move, pos.en_passant_target), 17838612477224877943);
 }
