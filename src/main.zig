@@ -1,5 +1,6 @@
 const std = @import("std");
 const File = std.fs.File;
+const TranspositionTable = @import("TranspositionTable.zig").TranspositionTable;
 const position = @import("./position.zig");
 const PVTable = @import("./pv.zig").PVTable;
 const parse_uci = @import("./parse/uci.zig").uci_command;
@@ -22,9 +23,10 @@ const start_position = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
 // Store the current position and current best move of the engine, used globally
 // to ensure that search can continue in the background while the engine
 // continue to receive commands.
-const GlobalData = struct { pos: position.Position, best_move: ?Move, stats: search.SearchStats };
+const GlobalData = struct { pos: position.Position, best_move: ?Move, stats: search.SearchStats, transposition_table: TranspositionTable };
 
 var engine_data: GlobalData = undefined;
+var has_engine_data: bool = false;
 
 const SearchMode = enum {
     infinite,
@@ -142,13 +144,13 @@ fn handleCommand(input: []const u8, logger: Logger, a: Allocator) !bool {
         },
 
         UciCommandType.position_startpos => |_| {
-            startNewGame(position.fromFEN(start_position, a) catch unreachable, a);
+            try startNewGame(position.fromFEN(start_position, a) catch unreachable, a);
         },
 
-        UciCommandType.ucinewgame => startNewGame(position.fromFEN(start_position, a) catch unreachable, a),
+        UciCommandType.ucinewgame => try startNewGame(position.fromFEN(start_position, a) catch unreachable, a),
 
         UciCommandType.position => |pos| {
-            startNewGame(position.fromFENStruct(pos.fen), a);
+            try startNewGame(position.fromFENStruct(pos.fen), a);
         },
 
         UciCommandType.debug => |enabled| debug_mode = enabled,
@@ -162,12 +164,12 @@ fn handleCommand(input: []const u8, logger: Logger, a: Allocator) !bool {
     return false;
 }
 
-fn startNewGame(pos: position.Position, _: Allocator) void {
-    engine_data = GlobalData{
-        .pos = pos,
-        .best_move = null,
-        .stats = search.SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 },
-    };
+fn startNewGame(pos: position.Position, a: Allocator) !void {
+    if (has_engine_data) {
+        engine_data.transposition_table.deinit();
+    }
+
+    engine_data = GlobalData{ .pos = pos, .best_move = null, .stats = search.SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 }, .transposition_table = try TranspositionTable.init(a) };
 }
 
 fn startAnalysis(options: []GoOption, logger: Logger, a: Allocator) !void {
