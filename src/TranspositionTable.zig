@@ -47,7 +47,7 @@ pub const TranspositionTable = struct {
         // store more than that. Therefore we use a simple checksum, XOR-ing the key
         // with the data.
         // On retrieval, if the checksum is OK, we know that the operation was
-        // VERY LIKELY atomic.
+        // LIKELY atomic.
         //
         // From a cursory glance at the LLVM docs, Unordered should be good enough
         // to prevent weird half-written values

@@ -9,6 +9,7 @@ const zobrist = @import("Zobrist.zig");
 const castling = @import("./castling.zig");
 const CastleSide = @import("./castling.zig").CastleSide;
 const b = @import("./bitboard_ops.zig");
+const std = @import("std");
 
 // When making a move, some information about the previous state cannot be
 // recovered from the next state. The moveArtifacts type contains this information.
@@ -16,6 +17,11 @@ pub const MoveArtifacts = struct {
     halfmove: u64,
     castling: u4,
     en_passant_position: u8,
+
+    // Old hash is a copy of the Zobrist hash before making the move.
+    // Theoretically this could be computed in unmakeMove, but I don't
+    // think it will be much faster than just storing it here.
+    old_hash: u64,
 };
 
 // Makes a quiet move (a regular move with no captures) given the position,
@@ -28,6 +34,9 @@ fn makeQuietMove(pos: *position.Position, m: Move) void {
 
     pos.board.boards[@enumToInt(m.piece_color)] ^= from_to_bitboard;
     pos.board.boards[@enumToInt(m.piece_type)] ^= from_to_bitboard;
+
+    pos.hash.flip_piece(m.from, m.piece_type, m.piece_color);
+    pos.hash.flip_piece(m.to, m.piece_type, m.piece_color);
 }
 
 // This is symmetrical, passing in the same move will unmake the move.
@@ -40,6 +49,85 @@ fn makeCapture(pos: *position.Position, m: Move) void {
     pos.board.boards[@enumToInt(m.piece_type)] ^= from_to_bitboard;
     pos.board.boards[@enumToInt(m.captured_piece_color orelse Color.white)] ^= to_bitboard;
     pos.board.boards[@enumToInt(m.captured_piece_type orelse PieceType.empty)] ^= to_bitboard;
+
+    pos.hash.flip_piece(m.from, m.piece_type, m.piece_color);
+    pos.hash.flip_piece(m.to, m.captured_piece_type orelse PieceType.empty, m.captured_piece_color orelse Color.white);
+    pos.hash.flip_piece(m.to, m.piece_type, m.piece_color);
+}
+
+fn makeCastle(pos: *position.Position, m: Move) void {
+    // Determine the starting and ending location of the pieces involved.
+    const king_origin: u8 = if (m.piece_color == Color.white) 4 else 60;
+    const rook_origin: u8 = if (m.is(MoveType.queenside_castle)) king_origin - 4 else king_origin + 3;
+    const king_final: u8 = if (m.is(MoveType.queenside_castle)) king_origin - 2 else king_origin + 2;
+    const rook_final: u8 = if (m.is(MoveType.queenside_castle)) king_origin - 1 else king_origin + 1;
+
+    // Swap the pieces in the board.
+    pos.board.set(PieceType.king, m.piece_color, king_final);
+    pos.board.set(PieceType.rook, m.piece_color, rook_final);
+    pos.board.unset(PieceType.king, m.piece_color, king_origin);
+    pos.board.unset(PieceType.rook, m.piece_color, rook_origin);
+
+    pos.hash.flip_piece(king_final, PieceType.king, m.piece_color);
+    pos.hash.flip_piece(king_origin, PieceType.king, m.piece_color);
+    pos.hash.flip_piece(rook_final, PieceType.rook, m.piece_color);
+    pos.hash.flip_piece(rook_origin, PieceType.rook, m.piece_color);
+
+    // If the king is moving, update the king index
+    pos.king_indices[@enumToInt(m.piece_color)] = king_final;
+}
+
+fn makePromoCapture(pos: *position.Position, m: Move) void {
+    const from_bitboard = b.bitboardFromIndex(m.from);
+    const to_bitboard = b.bitboardFromIndex(m.to);
+
+    const promotion_piece = m.getPromotedPiece();
+
+    pos.board.boards[@enumToInt(m.piece_color)] ^= from_bitboard;
+    pos.board.boards[@enumToInt(m.piece_type)] ^= from_bitboard;
+    pos.board.boards[@enumToInt(m.captured_piece_color orelse Color.white)] ^= to_bitboard;
+    pos.board.boards[@enumToInt(m.captured_piece_type orelse PieceType.empty)] ^= to_bitboard;
+    pos.board.boards[@enumToInt(promotion_piece)] ^= to_bitboard;
+    pos.board.boards[@enumToInt(m.piece_color)] ^= to_bitboard;
+
+    pos.hash.flip_piece(m.from, m.piece_type, m.piece_color);
+    pos.hash.flip_piece(m.to, m.captured_piece_type orelse PieceType.empty, m.captured_piece_color orelse Color.white);
+    pos.hash.flip_piece(m.to, promotion_piece, m.piece_color);
+}
+
+fn makePromo(pos: *position.Position, m: Move) void {
+    const from_bitboard = b.bitboardFromIndex(m.from);
+    const to_bitboard = b.bitboardFromIndex(m.to);
+
+    const promotion_piece = m.getPromotedPiece();
+
+    pos.board.boards[@enumToInt(m.piece_color)] ^= from_bitboard;
+    pos.board.boards[@enumToInt(m.piece_type)] ^= from_bitboard;
+    pos.board.boards[@enumToInt(promotion_piece)] ^= to_bitboard;
+    pos.board.boards[@enumToInt(m.piece_color)] ^= to_bitboard;
+
+    pos.hash.flip_piece(m.from, m.piece_type, m.piece_color);
+    pos.hash.flip_piece(m.to, promotion_piece, m.piece_color);
+}
+
+fn makeEnPassant(pos: *position.Position, m: Move) void {
+    const from_bitboard = b.bitboardFromIndex(m.from);
+    const to_bitboard = b.bitboardFromIndex(m.to);
+
+    const from_to_bitboard = from_bitboard ^ to_bitboard;
+
+    pos.board.boards[@enumToInt(m.piece_color)] ^= from_to_bitboard;
+    pos.board.boards[@enumToInt(m.piece_type)] ^= from_to_bitboard;
+
+    // Determine the en passant target, depending on the direction of
+    // movement.
+    const capture_index = if (m.piece_color == Color.white) m.to - 8 else m.to + 8;
+
+    pos.board.unset(m.captured_piece_type orelse PieceType.empty, m.captured_piece_color orelse Color.white, capture_index);
+
+    pos.hash.flip_piece(m.from, m.piece_type, m.piece_color);
+    pos.hash.flip_piece(m.to, m.piece_type, m.piece_color);
+    pos.hash.flip_piece(capture_index, m.captured_piece_type orelse PieceType.empty, m.captured_piece_color orelse Color.white);
 }
 
 // Performs a move on the given position. This function takes a pointer to the
@@ -49,11 +137,7 @@ fn makeCapture(pos: *position.Position, m: Move) void {
 // makeMove returns the artifacts required to reverse the move later.
 pub fn makeMove(pos: *position.Position, m: Move) MoveArtifacts {
     // Record the current state in artifacts.
-    var artifacts = MoveArtifacts{
-        .halfmove = pos.halfmove,
-        .castling = pos.castling,
-        .en_passant_position = pos.en_passant_target,
-    };
+    var artifacts = MoveArtifacts{ .halfmove = pos.halfmove, .castling = pos.castling, .en_passant_position = pos.en_passant_target, .old_hash = pos.hash.hash };
 
     // The new position by default has no en passant target.
     pos.en_passant_target = 0;
@@ -71,6 +155,7 @@ pub fn makeMove(pos: *position.Position, m: Move) MoveArtifacts {
         pos.castling = castling.updateCastling(pos.castling, CastleSide.queen, m.piece_color, false);
 
         // If the king is moving, update the king index
+        // TODO: can remove this?
         pos.king_indices[@enumToInt(m.piece_color)] = m.to;
     }
 
@@ -81,9 +166,6 @@ pub fn makeMove(pos: *position.Position, m: Move) MoveArtifacts {
             pos.castling = castling.updateCastling(pos.castling, CastleSide.king, m.piece_color, false);
         }
     }
-
-    const from_bitboard = b.bitboardFromIndex(m.from);
-    const to_bitboard = b.bitboardFromIndex(m.to);
 
     // Determine which type of move to make.
     if (m.is(MoveType.quiet)) {
@@ -98,50 +180,15 @@ pub fn makeMove(pos: *position.Position, m: Move) MoveArtifacts {
         pos.castling = castling.updateCastling(pos.castling, CastleSide.queen, m.piece_color, false);
         pos.castling = castling.updateCastling(pos.castling, CastleSide.king, m.piece_color, false);
 
-        // Determine the starting and ending location of the pieces involved.
-        const king_origin: u8 = if (m.piece_color == Color.white) 4 else 60;
-        const rook_origin: u8 = if (m.is(MoveType.queenside_castle)) king_origin - 4 else king_origin + 3;
-        const king_final: u8 = if (m.is(MoveType.queenside_castle)) king_origin - 2 else king_origin + 2;
-        const rook_final: u8 = if (m.is(MoveType.queenside_castle)) king_origin - 1 else king_origin + 1;
-
-        // Swap the pieces in the board.
-        pos.board.set(PieceType.king, m.piece_color, king_final);
-        pos.board.set(PieceType.rook, m.piece_color, rook_final);
-        pos.board.unset(PieceType.king, m.piece_color, king_origin);
-        pos.board.unset(PieceType.rook, m.piece_color, rook_origin);
-
-        // If the king is moving, update the king index
-        pos.king_indices[@enumToInt(m.piece_color)] = king_final;
+        makeCastle(pos, m);
     } else if (m.isPromotionCapture()) {
-        const promotion_piece = m.getPromotedPiece();
-
-        pos.board.boards[@enumToInt(m.piece_color)] ^= from_bitboard;
-        pos.board.boards[@enumToInt(m.piece_type)] ^= from_bitboard;
-        pos.board.boards[@enumToInt(m.captured_piece_color orelse Color.white)] ^= to_bitboard;
-        pos.board.boards[@enumToInt(m.captured_piece_type orelse PieceType.empty)] ^= to_bitboard;
-        pos.board.boards[@enumToInt(promotion_piece)] ^= to_bitboard;
-        pos.board.boards[@enumToInt(m.piece_color)] ^= to_bitboard;
+        makePromoCapture(pos, m);
     } else if (m.isPromotion()) {
-        const promotion_piece = m.getPromotedPiece();
-
-        pos.board.boards[@enumToInt(m.piece_color)] ^= from_bitboard;
-        pos.board.boards[@enumToInt(m.piece_type)] ^= from_bitboard;
-        pos.board.boards[@enumToInt(promotion_piece)] ^= to_bitboard;
-        pos.board.boards[@enumToInt(m.piece_color)] ^= to_bitboard;
-
+        makePromo(pos, m);
         // The halfmove counter is reset on a promotion.
         pos.halfmove = 0;
     } else if (m.is(MoveType.en_passant)) {
-        const from_to_bitboard = from_bitboard ^ to_bitboard;
-
-        pos.board.boards[@enumToInt(m.piece_color)] ^= from_to_bitboard;
-        pos.board.boards[@enumToInt(m.piece_type)] ^= from_to_bitboard;
-
-        // Determine the en passant target, depending on the direction of
-        // movement.
-        const capture_index = if (m.piece_color == Color.white) m.to - 8 else m.to + 8;
-
-        pos.board.unset(m.captured_piece_type orelse PieceType.empty, m.captured_piece_color orelse Color.white, capture_index);
+        makeEnPassant(pos, m);
     } else if (m.is(MoveType.double_pawn_push)) {
         makeQuietMove(pos, m);
 
@@ -186,7 +233,9 @@ pub fn makeMove(pos: *position.Position, m: Move) MoveArtifacts {
         pos.fullmove += 1;
     }
 
-    pos.hash = zobrist.update(pos, m);
+    pos.hash.update_castling(artifacts.castling, pos.castling);
+    pos.hash.update_en_passant(artifacts.en_passant_position, pos.en_passant_target);
+    pos.hash.update_side(pos.to_move);
 
     return artifacts;
 }
@@ -269,5 +318,5 @@ pub fn unmakeMove(pos: *position.Position, m: Move, artifacts: MoveArtifacts) vo
         }
     }
 
-    pos.hash = zobrist.update(pos, m);
+    pos.hash = zobrist.Hash.from_u64(artifacts.old_hash);
 }

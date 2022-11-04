@@ -21,7 +21,7 @@ test "fromFEN - empty board" {
         .halfmove = 0,
         .fullmove = 1,
         .king_indices = [2]u8{ 0, 0 },
-        .hash = zobrist.hash(&b, 0b1111, Color.white, 0),
+        .hash = zobrist.Hash.init(&b, 0b1111, Color.white, 0),
     }));
 }
 
@@ -35,7 +35,7 @@ test "fromFEN - empty board with other data variety" {
         .halfmove = 36,
         .fullmove = 113,
         .king_indices = [2]u8{ 0, 0 },
-        .hash = zobrist.hash(&b, 0b1001, Color.black, 40),
+        .hash = zobrist.Hash.init(&b, 0b1001, Color.black, 40),
     }));
 }
 
@@ -49,7 +49,7 @@ test "fromFEN - bug" {
         .halfmove = 1,
         .fullmove = 2,
         .king_indices = [2]u8{ 0, 0 },
-        .hash = zobrist.hash(&b, 0b1111, Color.black, 0),
+        .hash = zobrist.Hash.init(&b, 0b1111, Color.black, 0),
     }));
 }
 
@@ -73,6 +73,6 @@ test "fromFEN - starting board" {
         .halfmove = 0,
         .fullmove = 1,
         .king_indices = [2]u8{ 4, 60 },
-        .hash = zobrist.hash(&b, 0b1111, Color.white, 0),
+        .hash = zobrist.Hash.init(&b, 0b1111, Color.white, 0),
     }));
 }

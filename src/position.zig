@@ -35,7 +35,7 @@ pub const Position = struct {
     fullmove: u64,
 
     // the Zobrist hash of the position
-    hash: u64,
+    hash: zobrist.Hash,
 
     // Equality with another position
     pub fn eq(self: Position, other: Position) bool {
@@ -46,7 +46,7 @@ pub const Position = struct {
         if (self.en_passant_target != other.en_passant_target) return false;
         if (self.halfmove != other.halfmove) return false;
         if (self.fullmove != other.fullmove) return false;
-        if (self.hash != other.hash) return false;
+        if (self.hash.hash != other.hash.hash) return false;
 
         return true;
     }
@@ -68,6 +68,7 @@ pub const Position = struct {
         if (self.en_passant_target != other.en_passant_target) std.debug.print("\t[en passant] want: {}, got: {}\n", .{ self.en_passant_target, other.en_passant_target });
         if (self.halfmove != other.halfmove) std.debug.print("\t[halfmove] want: {}, got: {}\n", .{ self.halfmove, other.halfmove });
         if (self.fullmove != other.fullmove) std.debug.print("\t[fullmove] want: {}, got: {}\n", .{ self.fullmove, other.fullmove });
+        if (self.hash.hash != other.hash.hash) std.debug.print("\t[hash] want: {}, got: {}\n", .{ self.hash.hash, other.hash.hash });
 
         std.debug.print("=== COMPARISON COMPLETE ===\n", .{});
     }
@@ -162,7 +163,7 @@ pub fn fromFENStruct(fen: Fen) Position {
     }
 
     // Hash
-    const initial_hash = zobrist.hash(&board, castling, to_move, en_passant_target);
+    const initial_hash = zobrist.Hash.init(&board, castling, to_move, en_passant_target);
 
     return Position{ .board = board, .to_move = to_move, .castling = castling, .en_passant_target = en_passant_target, .halfmove = fen.halfmove, .fullmove = fen.fullmove, .king_indices = king_indices, .hash = initial_hash };
 }
