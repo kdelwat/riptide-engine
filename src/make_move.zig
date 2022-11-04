@@ -5,6 +5,7 @@ const PieceType = piece.PieceType;
 const Color = @import("./color.zig").Color;
 const color = @import("./color.zig");
 const position = @import("./position.zig");
+const zobrist = @import("Zobrist.zig");
 const castling = @import("./castling.zig");
 const CastleSide = @import("./castling.zig").CastleSide;
 const b = @import("./bitboard_ops.zig");
@@ -185,6 +186,8 @@ pub fn makeMove(pos: *position.Position, m: Move) MoveArtifacts {
         pos.fullmove += 1;
     }
 
+    pos.hash = zobrist.update(pos, m);
+
     return artifacts;
 }
 
@@ -265,4 +268,6 @@ pub fn unmakeMove(pos: *position.Position, m: Move, artifacts: MoveArtifacts) vo
             makeCapture(pos, m);
         }
     }
+
+    pos.hash = zobrist.update(pos, m);
 }

@@ -46,6 +46,7 @@ pub const Position = struct {
         if (self.en_passant_target != other.en_passant_target) return false;
         if (self.halfmove != other.halfmove) return false;
         if (self.fullmove != other.fullmove) return false;
+        if (self.hash != other.hash) return false;
 
         return true;
     }

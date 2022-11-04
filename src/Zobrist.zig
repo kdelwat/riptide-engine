@@ -3,6 +3,7 @@ const Position = @import("position.zig").Position;
 const piece = @import("piece.zig");
 const color = @import("color.zig");
 const Bitboard = @import("./bitboard.zig").Bitboard;
+const move = @import("move.zig");
 
 const b = @import("./bitboard_ops.zig");
 const SEED = 69;
@@ -110,4 +111,8 @@ pub fn hash(board: *Bitboard, castling: u4, to_move: color.Color, en_passant_tar
     z |= EN_PASSANT_CONSTANTS[@ctz(en_passant_target)];
 
     return z;
+}
+
+pub fn update(pos: *Position, _: move.Move) u64 {
+    return hash(&pos.board, pos.castling, pos.to_move, pos.en_passant_target);
 }

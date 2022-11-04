@@ -31,12 +31,12 @@ pub fn build(b: *Builder) void {
     run_step.dependOn(&run_cmd.step);
 
     const test_files: [7][]const u8 = [_][]const u8{
+        "src/make_move_test.zig",
         "src/moveorder_test.zig",
         "src/move_test.zig",
         "src/movegen_test.zig",
         "src/position_test.zig",
         "src/evaluate_test.zig",
-        "src/make_move_test.zig",
         "src/zobrist_test.zig",
     };
 
