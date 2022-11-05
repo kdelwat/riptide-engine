@@ -31,7 +31,7 @@ const option_btime = m.map(GoOption, toUnion("btime", GoOption), m.combine(.{ m.
 const option_winc = m.map(GoOption, toUnion("winc", GoOption), m.combine(.{ m.string("winc "), m.int(u64, .{ .base = 10 }) }));
 const option_binc = m.map(GoOption, toUnion("binc", GoOption), m.combine(.{ m.string("binc "), m.int(u64, .{ .base = 10 }) }));
 const option_movestogo = m.map(GoOption, toUnion("movestogo", GoOption), m.combine(.{ m.string("movestogo "), m.int(u64, .{ .base = 10 }) }));
-const option_depth = m.map(GoOption, toUnion("depth", GoOption), m.combine(.{ m.string("depth "), m.int(u64, .{ .base = 10 }) }));
+const option_depth = m.map(GoOption, toUnion("depth", GoOption), m.combine(.{ m.string("depth "), m.int(u8, .{ .base = 10 }) }));
 const option_nodes = m.map(GoOption, toUnion("nodes", GoOption), m.combine(.{ m.string("nodes "), m.int(u64, .{ .base = 10 }) }));
 const option_mate = m.map(GoOption, toUnion("mate", GoOption), m.combine(.{ m.string("mate "), m.int(u64, .{ .base = 10 }) }));
 const option_movetime = m.map(GoOption, toUnion("movetime", GoOption), m.combine(.{ m.string("movetime "), m.int(u64, .{ .base = 10 }) }));

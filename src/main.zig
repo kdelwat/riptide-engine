@@ -2,6 +2,7 @@ const std = @import("std");
 const File = std.fs.File;
 const TranspositionTable = @import("TranspositionTable.zig").TranspositionTable;
 const position = @import("./position.zig");
+const evaluate = @import("evaluate.zig");
 const PVTable = @import("./pv.zig").PVTable;
 const parse_uci = @import("./parse/uci.zig").uci_command;
 const uci = @import("./uci.zig");
@@ -62,7 +63,7 @@ const AnalysisOptions = struct {
     // depth, nodes, movesToMate, and movetime provide the options for the search
     // algorithm chosen.
     movestogo: u64,
-    depth: u64,
+    depth: search.Depth,
     nodes: u64,
     moves_to_mate: u64,
     movetime: u64,
@@ -169,7 +170,7 @@ fn startNewGame(pos: position.Position, a: Allocator) !void {
         engine_data.transposition_table.deinit();
     }
 
-    engine_data = GlobalData{ .pos = pos, .best_move = null, .stats = search.SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 }, .transposition_table = try TranspositionTable.init(a) };
+    engine_data = GlobalData{ .pos = pos, .best_move = null, .stats = search.SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 }, .transposition_table = try TranspositionTable.init(a, false) };
 }
 
 fn startAnalysis(options: []GoOption, logger: Logger, a: Allocator) !void {
@@ -233,7 +234,7 @@ fn startAnalysis(options: []GoOption, logger: Logger, a: Allocator) !void {
                 var should_cancel: bool = false;
 
                 var pv = PVTable.init();
-                const res = search.search(&engine_data.pos, &pv, opts.depth, -search.INFINITY, search.INFINITY, search.SearchContext{ .a = a, .cancelled = &should_cancel, .logger = logger, .stats = &engine_data.stats });
+                const res = search.search(&engine_data.pos, &engine_data.transposition_table, &pv, opts.depth, -evaluate.INFINITY, evaluate.INFINITY, search.SearchContext{ .a = a, .cancelled = &should_cancel, .logger = logger, .stats = &engine_data.stats });
                 if (res) |r| {
                     try sendBestMove(r.move, logger);
                 } else {
@@ -243,13 +244,13 @@ fn startAnalysis(options: []GoOption, logger: Logger, a: Allocator) !void {
             SearchMode.mate => {},
             SearchMode.ponder => {},
             SearchMode.movetime => {
-                _ = try worker.start(&engine_data.pos, &engine_data.best_move, &engine_data.stats, logger, a);
+                _ = try worker.start(&engine_data.pos, &engine_data.transposition_table, &engine_data.best_move, &engine_data.stats, logger, a);
                 std.time.sleep(opts.movetime * std.time.ns_per_ms);
                 try stopAnalysis(logger);
             },
             SearchMode.nodes => {},
             SearchMode.infinite => {
-                _ = try worker.start(&engine_data.pos, &engine_data.best_move, &engine_data.stats, logger, a);
+                _ = try worker.start(&engine_data.pos, &engine_data.transposition_table, &engine_data.best_move, &engine_data.stats, logger, a);
             },
         }
     }

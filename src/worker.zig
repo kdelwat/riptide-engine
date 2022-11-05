@@ -5,6 +5,7 @@ const File = std.fs.File;
 const Allocator = std.mem.Allocator;
 const Logger = @import("./logger.zig").Logger;
 const Move = @import("./move.zig").Move;
+const TranspositionTable = @import("./TranspositionTable.zig").TranspositionTable;
 
 // Search must run off the main thread, otherwise it will block UCI commands like
 // `stop`.
@@ -26,12 +27,12 @@ const WorkerError = error{
 };
 
 // Spawn the worker thread, or return an error if it has already been started
-pub fn start(pos: *position.Position, best_move: *?Move, stats: *search.SearchStats, logger: Logger, a: Allocator) !void {
+pub fn start(pos: *position.Position, tt: *TranspositionTable, best_move: *?Move, stats: *search.SearchStats, logger: Logger, a: Allocator) !void {
     if (status != WorkerThreadStatus.not_running) {
         return WorkerError.WorkerAlreadyRunning;
     }
 
-    thread = try std.Thread.spawn(.{}, search.searchInfinite, .{ pos, best_move, &cancel_search, stats, a, logger });
+    thread = try std.Thread.spawn(.{}, search.searchInfinite, .{ pos, tt, best_move, &cancel_search, stats, a, logger });
 }
 
 // Stop the worker and block until it finishes

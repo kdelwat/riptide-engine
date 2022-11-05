@@ -8,7 +8,14 @@ const TABLE_SIZE: u64 = std.math.pow(u64, 2, 8);
 
 const Key = u64;
 
-const TableEntry = struct { key: Key, evaluation: i64, data: u64, move: Move };
+const TableEntry = packed struct { key: Key, data: u64 };
+
+const TableStats = struct {
+    n_probe: u64,
+    n_hit: u64,
+    n_store: u64,
+    n_collisions: u64,
+};
 
 // TranspositionTable is a lockless shared hash table using
 // Hyatt and Mann's XOR method as a crude checksum.
@@ -17,7 +24,11 @@ pub const TranspositionTable = struct {
 
     allocator: std.mem.Allocator,
 
-    pub fn init(a: std.mem.Allocator) !TranspositionTable {
+    stats: TableStats,
+
+    enabled: bool,
+
+    pub fn init(a: std.mem.Allocator, enabled: bool) !TranspositionTable {
         var hashmap = try a.alloc(TableEntry, TABLE_SIZE);
 
         var i: u64 = 0;
@@ -27,7 +38,7 @@ pub const TranspositionTable = struct {
             i += 1;
         }
 
-        return TranspositionTable{ .hashmap = hashmap, .allocator = a };
+        return TranspositionTable{ .hashmap = hashmap, .allocator = a, .stats = TableStats{ .n_probe = 0, .n_hit = 0, .n_store = 0, .n_collisions = 0 }, .enabled = enabled };
     }
 
     pub fn deinit(self: TranspositionTable) void {
@@ -35,13 +46,24 @@ pub const TranspositionTable = struct {
     }
 
     // TODO: think about replacement policy; this currently clobbers
-    pub fn put(self: TranspositionTable, position: Position, data: TranspositionData) void {
-        const key = self.zobrist.hash(position);
+    pub fn put(self: *TranspositionTable, position: *Position, data: TranspositionData) void {
+        if (!self.enabled) {
+            return;
+        }
+
+        self.stats.n_store += 1;
+
+        const key = position.hash.hash;
         const i = key % TABLE_SIZE;
 
-        const evaluation = data.evaluation;
-        const move = data.move;
-        const extra_data = (@as(data.flags, u64) << 8) | data.depth;
+        // For stats only
+        if (self.hashmap[i].key > 0) {
+            if ((self.hashmap[i].key ^ self.hashmap[i].data) == self.hashmap[i].key and self.hashmap[i].key != key) {
+                self.stats.n_collisions += 1;
+            }
+        }
+
+        const entry = @bitCast(u64, data);
 
         // Each 64-bit value can be stored atomically, but we can't atomically
         // store more than that. Therefore we use a simple checksum, XOR-ing the key
@@ -51,21 +73,26 @@ pub const TranspositionTable = struct {
         //
         // From a cursory glance at the LLVM docs, Unordered should be good enough
         // to prevent weird half-written values
-        @atomicStore(u64, self.hashmap[i].key, key ^ evaluation ^ move ^ extra_data, std.builtin.AtomicOrder.Unordered);
-        @atomicStore(u64, self.hashmap[i].evaluation, evaluation, std.builtin.AtomicOrder.Unordered);
-        @atomicStore(u64, self.hashmap[i].move, move, std.builtin.AtomicOrder.Unordered);
-        @atomicStore(u64, self.hashmap[i].data, extra_data, std.builtin.AtomicOrder.Unordered);
+        @atomicStore(u64, @alignCast(@alignOf(u64), &self.hashmap[i].key), key ^ entry, std.builtin.AtomicOrder.Unordered);
+        @atomicStore(u64, @alignCast(@alignOf(u64), &self.hashmap[i].data), entry, std.builtin.AtomicOrder.Unordered);
     }
 
     // If no value is returned, either there's no relevant entry or it's been
     // corrupted
-    pub fn get(self: TranspositionTable, position: Position) ?TranspositionData {
-        const key = self.zobrist.hash(position);
+    pub fn get(self: *TranspositionTable, position: *Position) ?TranspositionData {
+        if (!self.enabled) {
+            return null;
+        }
+
+        self.stats.n_probe += 1;
+        const key = position.hash.hash;
         const i = key % TABLE_SIZE;
 
         if (self.hashmap[i].key > 0) {
-            if ((self.hashmap[i].key ^ self.hashmap[i].evaluations ^ self.hashmap[i].moves ^ self.hashmap[i].data) == key) {
-                return .{ .evaluation = self.hashmap[i].evaluation, .move = self.hashmap[i].moves, .depth = @as(self.hashmap[i].data & 0xFF, u8), .flags = @as(self.hashmap[i].data >> 8, u8) };
+            if ((self.hashmap[i].key ^ self.hashmap[i].data) == key) {
+                self.stats.n_hit += 1;
+                const entry = @bitCast(TranspositionData, self.hashmap[i].data);
+                return entry;
             }
         }
 

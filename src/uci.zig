@@ -62,7 +62,7 @@ pub const GoOption = union(GoOptionType) {
     winc: u64,
     binc: u64,
     movestogo: u64,
-    depth: u64,
+    depth: u8,
     nodes: u64,
     mate: u64,
     movetime: u64,

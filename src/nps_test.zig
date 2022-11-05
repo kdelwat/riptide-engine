@@ -7,6 +7,8 @@ const std = @import("std");
 const expect = std.testing.expect;
 const test_allocator = std.testing.allocator;
 const evaluate = @import("evaluate.zig").evaluate;
+const INFINITY = @import("evaluate.zig").INFINITY;
+const TranspositionTable = @import("TranspositionTable.zig").TranspositionTable;
 
 fn fromFEN(f: []const u8) position.Position {
     return position.fromFEN(f, test_allocator) catch unreachable;
@@ -41,8 +43,10 @@ test "search efficiency (single tree)" {
     var stats = search.SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 };
 
     var pv = PVTable.init();
+    var tt = try TranspositionTable.init(test_allocator, true);
+    defer tt.deinit();
 
-    _ = search.search(start_pos, &pv, 6, -search.INFINITY, search.INFINITY, search.SearchContext{ .cancelled = &ctx_cancelled, .logger = l, .a = test_allocator, .stats = &stats });
+    _ = search.search(start_pos, &tt, &pv, 6, -INFINITY, INFINITY, search.SearchContext{ .cancelled = &ctx_cancelled, .logger = l, .a = test_allocator, .stats = &stats });
 
     std.debug.print("Nodes visited single search: {}/{}\n", .{ stats.nodes_visited, 4865609 });
     std.debug.print("Nodes evaluated single search: {}/{}\n", .{ stats.nodes_evaluated, 4865609 });
@@ -54,8 +58,9 @@ test "search efficiency (iterative deepening)" {
     var ctx_cancelled = false;
     var l = logger.Logger.init();
     var stats = search.SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 };
+    var tt = try TranspositionTable.init(test_allocator, true);
 
-    _ = search.searchUntilDepth(start_pos, 6, search.SearchContext{ .cancelled = &ctx_cancelled, .logger = l, .a = test_allocator, .stats = &stats });
+    _ = search.searchUntilDepth(start_pos, &tt, 6, search.SearchContext{ .cancelled = &ctx_cancelled, .logger = l, .a = test_allocator, .stats = &stats });
 
     const tree_nodes =
         20 +
@@ -66,4 +71,18 @@ test "search efficiency (iterative deepening)" {
 
     std.debug.print("Nodes visited ID: {}/{}\n", .{ stats.nodes_visited, tree_nodes });
     std.debug.print("Nodes evaluated ID: {}/{}\n", .{ stats.nodes_evaluated, tree_nodes });
+
+    tt.deinit();
+
+    start_pos = &fromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+
+    stats = search.SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 };
+    tt = try TranspositionTable.init(test_allocator, false);
+
+    _ = search.searchUntilDepth(start_pos, &tt, 6, search.SearchContext{ .cancelled = &ctx_cancelled, .logger = l, .a = test_allocator, .stats = &stats });
+
+    std.debug.print("Nodes visited ID (no hash): {}/{}\n", .{ stats.nodes_visited, tree_nodes });
+    std.debug.print("Nodes evaluated ID (no hash): {}/{}\n", .{ stats.nodes_evaluated, tree_nodes });
+
+    tt.deinit();
 }

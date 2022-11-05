@@ -36,14 +36,14 @@ pub const Hash = packed struct {
 
                 while (pieces != 0) {
                     const i = b.bitscanForwardAndReset(&pieces);
-                    z |= PIECE_CONSTANTS[i][@enumToInt(piece_type)][@enumToInt(piece_color)];
+                    z ^= PIECE_CONSTANTS[i][@enumToInt(piece_type)][@enumToInt(piece_color)];
                 }
             }
         }
 
-        z |= CASTLING_CONSTANTS[castling];
-        z |= SIDE_CONSTANTS[@enumToInt(to_move)];
-        z |= EN_PASSANT_CONSTANTS[@ctz(en_passant_target)];
+        z ^= CASTLING_CONSTANTS[castling];
+        z ^= SIDE_CONSTANTS[@enumToInt(to_move)];
+        z ^= EN_PASSANT_CONSTANTS[@ctz(en_passant_target)];
 
         return Hash{ .hash = z };
     }
@@ -55,22 +55,22 @@ pub const Hash = packed struct {
     // Add a piece if not present
     // Remove a piece if present
     pub fn flip_piece(self: *Hash, sq: u8, piece_type: piece.PieceType, piece_color: color.Color) void {
-        self.hash |= PIECE_CONSTANTS[sq][@enumToInt(piece_type)][@enumToInt(piece_color)];
+        self.hash ^= PIECE_CONSTANTS[sq][@enumToInt(piece_type)][@enumToInt(piece_color)];
     }
 
     pub fn update_castling(self: *Hash, old: u4, new: u4) void {
-        self.hash |= CASTLING_CONSTANTS[old];
-        self.hash |= CASTLING_CONSTANTS[new];
+        self.hash ^= CASTLING_CONSTANTS[old];
+        self.hash ^= CASTLING_CONSTANTS[new];
     }
 
     pub fn update_side(self: *Hash, new: color.Color) void {
-        self.hash |= SIDE_CONSTANTS[@enumToInt(color.invert(new))];
-        self.hash |= SIDE_CONSTANTS[@enumToInt(new)];
+        self.hash ^= SIDE_CONSTANTS[@enumToInt(color.invert(new))];
+        self.hash ^= SIDE_CONSTANTS[@enumToInt(new)];
     }
 
     pub fn update_en_passant(self: *Hash, old: u8, new: u8) void {
-        self.hash |= EN_PASSANT_CONSTANTS[@ctz(old)];
-        self.hash |= EN_PASSANT_CONSTANTS[@ctz(new)];
+        self.hash ^= EN_PASSANT_CONSTANTS[@ctz(old)];
+        self.hash ^= EN_PASSANT_CONSTANTS[@ctz(new)];
     }
 };
 
