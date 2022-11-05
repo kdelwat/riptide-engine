@@ -45,7 +45,6 @@ pub fn searchInfinite(pos: *position.Position, tt: *TranspositionTable, best_mov
     var result: ?SearchResult = null;
     while (true) {
         try logger.log("SEARCH", "searching: depth = {}", .{depth});
-        std.debug.print("searching: depth = {}\n", .{depth});
 
         result = search(pos, tt, &pv, depth, alpha, beta, .{ .logger = logger, .a = a, .cancelled = cancelled, .stats = stats });
 

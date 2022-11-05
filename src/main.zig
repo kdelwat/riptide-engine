@@ -6,6 +6,7 @@ const evaluate = @import("evaluate.zig");
 const PVTable = @import("./pv.zig").PVTable;
 const parse_uci = @import("./parse/uci.zig").uci_command;
 const uci = @import("./uci.zig");
+const make_move = @import("./make_move.zig");
 const algebraic = @import("./parse/algebraic.zig");
 const UciCommandType = @import("./uci.zig").UciCommandType;
 const GoOption = @import("./uci.zig").GoOption;
@@ -144,8 +145,15 @@ fn handleCommand(input: []const u8, logger: Logger, a: Allocator) !bool {
             try logger.outgoing("readyok", .{});
         },
 
-        UciCommandType.position_startpos => |_| {
-            try startNewGame(position.fromFEN(start_position, a) catch unreachable, a);
+        UciCommandType.position_startpos => |moves| {
+            var p = try position.fromFEN(start_position, a);
+
+            for (moves) |an| {
+                var m = Move.fromLongAlgebraic(&p, an);
+                _ = make_move.makeMove(&p, m);
+            }
+
+            try startNewGame(p, a);
         },
 
         UciCommandType.ucinewgame => try startNewGame(position.fromFEN(start_position, a) catch unreachable, a),

@@ -4,6 +4,9 @@ const std = @import("std");
 const Color = @import("./color.zig").Color;
 const color = @import("./color.zig");
 const bitboard = @import("./bitboard.zig");
+const position = @import("position.zig");
+const b = @import("./bitboard_ops.zig");
+const LongAlgebraicMove = @import("./parse/algebraic.zig").LongAlgebraicMove;
 
 pub const MoveType = enum(u4) {
     quiet = 0b0000,
@@ -176,6 +179,85 @@ pub const Move = struct {
             "{c}{c}{c}{c}",
             .{ from_file, from_rank, to_file, to_rank },
         );
+    }
+
+    pub fn fromLongAlgebraic(pos: *position.Position, m: LongAlgebraicMove) Move {
+        const to_file = m.to[0] - 'a';
+        const to_rank = m.to[1] - '1';
+        const to = bitboard.bitboardIndex(to_file, to_rank);
+
+        const from_file = m.from[0] - 'a';
+        const from_rank = m.from[1] - '1';
+        const from = bitboard.bitboardIndex(from_file, from_rank);
+
+        var mt: MoveType = .quiet;
+        var captured_piece_type: ?PieceType = null;
+        var captured_piece_color: ?Color = null;
+
+        if (m.promotion) |promo| {
+            if (pos.pieceOn(to)) {
+                // Promo capture
+                mt = switch (promo[0]) {
+                    'n' => .knight_promo_capture,
+                    'b' => .bishop_promo_capture,
+                    'r' => .rook_promo_capture,
+                    'q' => .queen_promo_capture,
+                    else => unreachable,
+                };
+
+                captured_piece_color = color.invert(pos.to_move);
+                captured_piece_type = pos.board.getPieceTypeAt(to);
+            } else {
+                // Promo
+                mt = switch (promo[0]) {
+                    'n' => .knight_promo,
+                    'b' => .bishop_promo,
+                    'r' => .rook_promo,
+                    'q' => .queen_promo,
+                    else => unreachable,
+                };
+            }
+        } else if (pos.board.getPieceTypeAt(from) == .king) {
+            // Might be a castle
+            if (from == 4 and to == 6) {
+                mt = .kingside_castle;
+            } else if (from == 4 and to == 2) {
+                mt = .queenside_castle;
+            } else if (from == 60 and to == 62) {
+                mt = .kingside_castle;
+            } else if (from == 60 and to == 58) {
+                mt = .queenside_castle;
+            }
+        } else if (pos.pieceOn(to)) {
+            // Capture
+            mt = .capture;
+            captured_piece_color = color.invert(pos.to_move);
+            captured_piece_type = pos.board.getPieceTypeAt(to);
+        } else if (mt != .kingside_castle and mt != .queenside_castle) {
+            if (pos.board.getPieceTypeAt(from) == .pawn) {
+                var rankDiff: u8 = undefined;
+                if (bitboard.rankIndex(from) > bitboard.rankIndex(to)) {
+                    rankDiff = bitboard.rankIndex(from) - bitboard.rankIndex(to);
+                } else {
+                    rankDiff = bitboard.rankIndex(to) - bitboard.rankIndex(from);
+                }
+
+                if (bitboard.fileIndex(from) != bitboard.fileIndex(to)) {
+                    // En passant, pawn has changed files but no capture piece
+                    mt = .en_passant;
+                    captured_piece_color = color.invert(pos.to_move);
+                    captured_piece_type = .pawn;
+                } else if (rankDiff == 2) {
+                    mt = .double_pawn_push;
+                } else {
+                    mt = .quiet;
+                }
+            } else {
+                mt = .quiet;
+            }
+        }
+
+        return Move{ .move_type = mt, .piece_type = pos.board.getPieceTypeAt(from), .piece_color = pos.to_move, .captured_piece_type = captured_piece_type, .captured_piece_color = captured_piece_color, .from = from, .to = to };
     }
 };
 
