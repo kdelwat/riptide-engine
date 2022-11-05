@@ -75,7 +75,7 @@ pub const Searcher = struct {
             if (result) |bm| {
                 if (bm.score <= alpha or bm.score >= beta) {
                     // Aspiration window missed; do a full re-search
-                    std.debug.print("Missed aspiration window at depth {}\n", .{depth});
+                    try self.logger.log("SEARCH", "Missed aspiration window at depth {}\n", .{depth});
                     alpha = -evaluate.INFINITY;
                     beta = evaluate.INFINITY;
                     continue;

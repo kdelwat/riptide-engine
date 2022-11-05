@@ -115,7 +115,7 @@ pub fn main() anyerror!void {
 
     var quit: bool = false;
 
-    var buffer: [300]u8 = undefined;
+    var buffer: [10000]u8 = undefined;
 
     while (!quit) {
         const input = (try nextLine(stdin.reader(), &buffer)).?;
@@ -274,9 +274,12 @@ fn startAnalysis(options: []GoOption, logger: Logger, _: Allocator) !void {
             SearchMode.mate => {},
             SearchMode.ponder => {},
             SearchMode.movetime => {
+                var then = std.time.milliTimestamp();
                 _ = try worker.start(&searcher);
                 std.time.sleep(@floatToInt(u64, @intToFloat(f64, opts.movetime * std.time.ns_per_ms) * MOVETIME_SAFETY_FACTOR));
                 try stopAnalysis(logger);
+                var now = std.time.milliTimestamp();
+                try logger.log("main", "Elapsed: {}ms\n", .{now - then});
             },
             SearchMode.nodes => {},
             SearchMode.infinite => {
