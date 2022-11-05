@@ -10,7 +10,7 @@ pub const LongAlgebraicMove = struct {
 pub const long_algebraic_notation = m.map(LongAlgebraicMove, m.toStruct(LongAlgebraicMove), long_algebraic);
 
 const rank = m.discard(utf8.range('1', '8'));
-const file = m.discard(utf8.range('a', 'f'));
+const file = m.discard(utf8.range('a', 'h'));
 const pos = m.asStr(m.combine(.{ file, rank }));
 const promo = m.asStr(m.oneOf(.{
     utf8.char('r'),

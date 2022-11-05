@@ -22,6 +22,10 @@ const builtin = @import("builtin");
 
 const start_position = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
+// When searching with mode movetime, apply a safety factor to allow clean
+// exits and avoid being timed out
+const MOVETIME_SAFETY_FACTOR = 0.9;
+
 // Store the current position and current best move of the engine, used globally
 // to ensure that search can continue in the background while the engine
 // continue to receive commands.
@@ -88,7 +92,15 @@ pub fn main() anyerror!void {
     // Get file descriptors for IO
     const stdin = std.io.getStdIn();
 
-    const logfile_path: []const u8 = "/mnt/ext/riptide_logs.txt";
+    // Set up allocator with default options
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer {
+        _ = gpa.deinit();
+    }
+
+    // Create logger
+    const time = std.time.nanoTimestamp();
+    const logfile_path: []const u8 = try std.fmt.allocPrint(gpa.allocator(), "/mnt/ext/riptide.{}.txt", .{time});
 
     const logfile = try std.fs.createFileAbsolute(
         logfile_path,
@@ -98,12 +110,6 @@ pub fn main() anyerror!void {
 
     const logger: Logger = try Logger.initFile(logfile_path);
     defer logger.deinit();
-
-    // Set up allocator with default options
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer {
-        _ = gpa.deinit();
-    }
 
     var quit: bool = false;
 
@@ -150,6 +156,7 @@ fn handleCommand(input: []const u8, logger: Logger, a: Allocator) !bool {
 
             for (moves) |an| {
                 var m = Move.fromLongAlgebraic(&p, an);
+                //std.debug.print("make move {} {}\n", .{ an, m });
                 _ = make_move.makeMove(&p, m);
             }
 
@@ -178,7 +185,7 @@ fn startNewGame(pos: position.Position, a: Allocator) !void {
         engine_data.transposition_table.deinit();
     }
 
-    engine_data = GlobalData{ .pos = pos, .best_move = null, .stats = search.SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 }, .transposition_table = try TranspositionTable.init(a, true) };
+    engine_data = GlobalData{ .pos = pos, .best_move = null, .stats = search.SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 }, .transposition_table = try TranspositionTable.init(a, false) };
 }
 
 fn startAnalysis(options: []GoOption, logger: Logger, a: Allocator) !void {
@@ -253,7 +260,7 @@ fn startAnalysis(options: []GoOption, logger: Logger, a: Allocator) !void {
             SearchMode.ponder => {},
             SearchMode.movetime => {
                 _ = try worker.start(&engine_data.pos, &engine_data.transposition_table, &engine_data.best_move, &engine_data.stats, logger, a);
-                std.time.sleep(opts.movetime * std.time.ns_per_ms);
+                std.time.sleep(@floatToInt(u64, @intToFloat(f64, opts.movetime * std.time.ns_per_ms) * MOVETIME_SAFETY_FACTOR));
                 try stopAnalysis(logger);
             },
             SearchMode.nodes => {},

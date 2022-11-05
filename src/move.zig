@@ -158,8 +158,23 @@ pub const Move = struct {
     }
 
     pub fn toLongAlgebraic(self: Move, buf: []u8) !void {
-        const to = self.to;
-        const from = self.from;
+        var to = self.to;
+        var from = self.from;
+
+        if (self.move_type == .kingside_castle and self.piece_color == .white) {
+            from = 4;
+            to = 6;
+        } else if (self.move_type == .queenside_castle and self.piece_color == .white) {
+            from = 4;
+            to = 2;
+        } else if (self.move_type == .kingside_castle and self.piece_color == .black) {
+            from = 60;
+            to = 62;
+        } else if (self.move_type == .queenside_castle and self.piece_color == .black) {
+            from = 60;
+            to = 58;
+        }
+
         const to_rank = bitboard.rankIndex(to) + '1';
         const to_file = bitboard.fileIndex(to) + 'a';
         const from_rank = bitboard.rankIndex(from) + '1';
