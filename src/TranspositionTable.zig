@@ -3,9 +3,6 @@ const Position = @import("position.zig").Position;
 const Move = @import("move.zig").Move;
 const TranspositionData = @import("TranspositionData.zig").TranspositionData;
 
-// TODO: make configurable
-const TABLE_SIZE: u64 = std.math.pow(u64, 2, 8);
-
 const Key = u64;
 
 const TableEntry = packed struct { key: Key, data: u64 };
@@ -26,19 +23,22 @@ pub const TranspositionTable = struct {
 
     stats: TableStats,
 
+    n_entries: u64,
     enabled: bool,
 
-    pub fn init(a: std.mem.Allocator, enabled: bool) !TranspositionTable {
-        var hashmap = try a.alloc(TableEntry, TABLE_SIZE);
+    pub fn init(a: std.mem.Allocator, size: u64) !TranspositionTable {
+        // Configurable by size in MB
+        var n_entries = size * 1000 * 1000 / entrySize();
+        var hashmap = try a.alloc(TableEntry, n_entries);
 
         var i: u64 = 0;
-        while (i < TABLE_SIZE) {
+        while (i < n_entries) {
             hashmap[i].key = 0;
 
             i += 1;
         }
 
-        return TranspositionTable{ .hashmap = hashmap, .allocator = a, .stats = TableStats{ .n_probe = 0, .n_hit = 0, .n_store = 0, .n_collisions = 0 }, .enabled = enabled };
+        return TranspositionTable{ .hashmap = hashmap, .allocator = a, .stats = TableStats{ .n_probe = 0, .n_hit = 0, .n_store = 0, .n_collisions = 0 }, .enabled = n_entries > 0, .n_entries = n_entries };
     }
 
     pub fn deinit(self: TranspositionTable) void {
@@ -54,7 +54,7 @@ pub const TranspositionTable = struct {
         self.stats.n_store += 1;
 
         const key = position.hash.hash;
-        const i = key % TABLE_SIZE;
+        const i = key % self.n_entries;
 
         // For stats only
         if (self.hashmap[i].key > 0) {
@@ -86,7 +86,7 @@ pub const TranspositionTable = struct {
 
         self.stats.n_probe += 1;
         const key = position.hash.hash;
-        const i = key % TABLE_SIZE;
+        const i = key % self.n_entries;
 
         if (self.hashmap[i].key > 0) {
             if ((self.hashmap[i].key ^ self.hashmap[i].data) == key) {
@@ -99,3 +99,7 @@ pub const TranspositionTable = struct {
         return null;
     }
 };
+
+fn entrySize() comptime_int {
+    return @sizeOf(u64) + @sizeOf(u64);
+}

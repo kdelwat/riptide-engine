@@ -20,11 +20,6 @@ pub const UciCommandPosition = struct {
     moves: []algebraic.LongAlgebraicMove,
 };
 
-pub const UciCommandSetOption = struct {
-    name: []const u8,
-    value: ?[]const u8,
-};
-
 pub const UciCommand = union(UciCommandType) {
     uci: void,
     isready: void,
@@ -32,7 +27,7 @@ pub const UciCommand = union(UciCommandType) {
     position: UciCommandPosition,
     ucinewgame: void,
     debug: bool,
-    setoption: UciCommandSetOption,
+    setoption: EngineOption,
     quit: void,
     go: []GoOption,
     stop: void,
@@ -68,3 +63,7 @@ pub const GoOption = union(GoOptionType) {
     movetime: u64,
     searchmoves: []algebraic.LongAlgebraicMove,
 };
+
+pub const EngineOptionType = enum { hash, threads, unknown };
+
+pub const EngineOption = union(EngineOptionType) { hash: u64, threads: u64, unknown };

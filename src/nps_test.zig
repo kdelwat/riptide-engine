@@ -8,7 +8,8 @@ const expect = std.testing.expect;
 const test_allocator = std.testing.allocator;
 const evaluate = @import("evaluate.zig").evaluate;
 const INFINITY = @import("evaluate.zig").INFINITY;
-const TranspositionTable = @import("TranspositionTable.zig").TranspositionTable;
+const GameData = @import("GameData.zig").GameData;
+const GameOptions = @import("GameData.zig").GameOptions;
 
 fn fromFEN(f: []const u8) position.Position {
     return position.fromFEN(f, test_allocator) catch unreachable;
@@ -36,31 +37,29 @@ test "evaluation nodes per second" {
 }
 
 test "search efficiency (single tree)" {
-    var start_pos = &fromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    var start_pos = fromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
 
-    var ctx_cancelled = false;
     var l = logger.Logger.init();
-    var stats = search.SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 };
+    var game_data = try GameData.init(test_allocator, GameOptions{ .hash_table_size = 0, .threads = 1 });
+    defer game_data.deinit();
 
-    var pv = PVTable.init();
-    var tt = try TranspositionTable.init(test_allocator, true);
-    defer tt.deinit();
+    var searcher = search.Searcher.init(start_pos, &game_data, test_allocator, l);
 
-    _ = search.search(start_pos, &tt, &pv, 6, -INFINITY, INFINITY, search.SearchContext{ .cancelled = &ctx_cancelled, .logger = l, .a = test_allocator, .stats = &stats });
+    _ = searcher.search(6, -INFINITY, INFINITY);
 
-    std.debug.print("Nodes visited single search: {}/{}\n", .{ stats.nodes_visited, 4865609 });
-    std.debug.print("Nodes evaluated single search: {}/{}\n", .{ stats.nodes_evaluated, 4865609 });
+    std.debug.print("Nodes visited single search: {}/{}\n", .{ searcher.stats.nodes_visited, 4865609 });
+    std.debug.print("Nodes evaluated single search: {}/{}\n", .{ searcher.stats.nodes_evaluated, 4865609 });
 }
 
 test "search efficiency (iterative deepening)" {
-    var start_pos = &fromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    var start_pos = fromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
 
-    var ctx_cancelled = false;
     var l = logger.Logger.init();
-    var stats = search.SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 };
-    var tt = try TranspositionTable.init(test_allocator, true);
+    var game_data = try GameData.init(test_allocator, GameOptions{ .hash_table_size = 128, .threads = 1 });
 
-    _ = search.searchUntilDepth(start_pos, &tt, 6, search.SearchContext{ .cancelled = &ctx_cancelled, .logger = l, .a = test_allocator, .stats = &stats });
+    var searcher = search.Searcher.init(start_pos, &game_data, test_allocator, l);
+
+    _ = searcher.searchUntilDepthIterative(6);
 
     const tree_nodes =
         20 +
@@ -69,20 +68,21 @@ test "search efficiency (iterative deepening)" {
         197281 +
         4865609;
 
-    std.debug.print("Nodes visited ID: {}/{}\n", .{ stats.nodes_visited, tree_nodes });
-    std.debug.print("Nodes evaluated ID: {}/{}\n", .{ stats.nodes_evaluated, tree_nodes });
+    std.debug.print("Nodes visited ID: {}/{}\n", .{ searcher.stats.nodes_visited, tree_nodes });
+    std.debug.print("Nodes evaluated ID: {}/{}\n", .{ searcher.stats.nodes_evaluated, tree_nodes });
 
-    tt.deinit();
+    game_data.deinit();
 
-    start_pos = &fromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    start_pos = fromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
 
-    stats = search.SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 };
-    tt = try TranspositionTable.init(test_allocator, false);
+    game_data = try GameData.init(test_allocator, GameOptions{ .hash_table_size = 0, .threads = 1 });
 
-    _ = search.searchUntilDepth(start_pos, &tt, 6, search.SearchContext{ .cancelled = &ctx_cancelled, .logger = l, .a = test_allocator, .stats = &stats });
+    searcher = search.Searcher.init(start_pos, &game_data, test_allocator, l);
 
-    std.debug.print("Nodes visited ID (no hash): {}/{}\n", .{ stats.nodes_visited, tree_nodes });
-    std.debug.print("Nodes evaluated ID (no hash): {}/{}\n", .{ stats.nodes_evaluated, tree_nodes });
+    _ = searcher.searchUntilDepthIterative(6);
 
-    tt.deinit();
+    std.debug.print("Nodes visited ID (no hash): {}/{}\n", .{ searcher.stats.nodes_visited, tree_nodes });
+    std.debug.print("Nodes evaluated ID (no hash): {}/{}\n", .{ searcher.stats.nodes_evaluated, tree_nodes });
+
+    game_data.deinit();
 }

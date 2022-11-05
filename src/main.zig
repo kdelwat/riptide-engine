@@ -10,6 +10,7 @@ const make_move = @import("./make_move.zig");
 const algebraic = @import("./parse/algebraic.zig");
 const UciCommandType = @import("./uci.zig").UciCommandType;
 const GoOption = @import("./uci.zig").GoOption;
+const EngineOption = @import("./uci.zig").EngineOption;
 const GoOptionType = @import("./uci.zig").GoOptionType;
 const fen = @import("./parse/fen.zig");
 const Move = @import("./move.zig").Move;
@@ -18,7 +19,10 @@ const worker = @import("./worker.zig");
 const Allocator = std.mem.Allocator;
 const test_allocator = std.testing.allocator;
 const Logger = @import("./logger.zig").Logger;
+const GameData = @import("GameData.zig").GameData;
+const game = @import("GameData.zig");
 const builtin = @import("builtin");
+const Searcher = @import("search.zig").Searcher;
 
 const start_position = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
@@ -26,13 +30,10 @@ const start_position = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
 // exits and avoid being timed out
 const MOVETIME_SAFETY_FACTOR = 0.9;
 
-// Store the current position and current best move of the engine, used globally
-// to ensure that search can continue in the background while the engine
-// continue to receive commands.
-const GlobalData = struct { pos: position.Position, best_move: ?Move, stats: search.SearchStats, transposition_table: TranspositionTable };
-
-var engine_data: GlobalData = undefined;
-var has_engine_data: bool = false;
+var game_data: GameData = undefined;
+var has_game_data: bool = false;
+var game_options: game.GameOptions = game.DEFAULTS;
+var searcher: Searcher = undefined;
 
 const SearchMode = enum {
     infinite,
@@ -137,6 +138,7 @@ fn handleCommand(input: []const u8, logger: Logger, a: Allocator) !bool {
         UciCommandType.uci => {
             try logger.outgoing("id name Riptide", .{});
             try logger.outgoing("id author Cadel Watson", .{});
+            try logger.outgoing("option name Hash type spin default 1 min 1 max 256", .{});
             try logger.outgoing("uciok", .{});
         },
 
@@ -160,17 +162,28 @@ fn handleCommand(input: []const u8, logger: Logger, a: Allocator) !bool {
                 _ = make_move.makeMove(&p, m);
             }
 
-            try startNewGame(p, a);
+            try startNewPosition(p, a, logger);
         },
 
-        UciCommandType.ucinewgame => try startNewGame(position.fromFEN(start_position, a) catch unreachable, a),
+        UciCommandType.ucinewgame => try startNewGame(a),
 
         UciCommandType.position => |pos| {
-            try startNewGame(position.fromFENStruct(pos.fen), a);
+            try startNewPosition(position.fromFENStruct(pos.fen), a, logger);
         },
 
         UciCommandType.debug => |enabled| debug_mode = enabled,
-        UciCommandType.setoption => |_| return false,
+        UciCommandType.setoption => |opt| {
+            switch (opt) {
+                EngineOption.hash => |hash_size| {
+                    game_options.hash_table_size = hash_size;
+                },
+                EngineOption.threads => |threads| {
+                    game_options.threads = threads;
+                },
+                else => {},
+            }
+            return false;
+        },
         UciCommandType.quit => return true,
         UciCommandType.ponderhit => return false,
         UciCommandType.go => |options| startAnalysis(options, logger, a),
@@ -180,15 +193,19 @@ fn handleCommand(input: []const u8, logger: Logger, a: Allocator) !bool {
     return false;
 }
 
-fn startNewGame(pos: position.Position, a: Allocator) !void {
-    if (has_engine_data) {
-        engine_data.transposition_table.deinit();
+fn startNewGame(a: Allocator) !void {
+    if (has_game_data) {
+        game_data.deinit();
     }
 
-    engine_data = GlobalData{ .pos = pos, .best_move = null, .stats = search.SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 }, .transposition_table = try TranspositionTable.init(a, false) };
+    game_data = try GameData.init(a, game_options);
 }
 
-fn startAnalysis(options: []GoOption, logger: Logger, a: Allocator) !void {
+fn startNewPosition(pos: position.Position, allocator: Allocator, logger: Logger) !void {
+    searcher = Searcher.init(pos, &game_data, allocator, logger);
+}
+
+fn startAnalysis(options: []GoOption, logger: Logger, _: Allocator) !void {
     var default_search_moves: []const algebraic.LongAlgebraicMove = ([_]algebraic.LongAlgebraicMove{})[0..];
     var opts: AnalysisOptions = .{
         .search_mode = SearchMode.infinite,
@@ -246,10 +263,7 @@ fn startAnalysis(options: []GoOption, logger: Logger, a: Allocator) !void {
 
         switch (opts.search_mode) {
             SearchMode.depth => {
-                var should_cancel: bool = false;
-
-                var pv = PVTable.init();
-                const res = search.search(&engine_data.pos, &engine_data.transposition_table, &pv, opts.depth, -evaluate.INFINITY, evaluate.INFINITY, search.SearchContext{ .a = a, .cancelled = &should_cancel, .logger = logger, .stats = &engine_data.stats });
+                const res = searcher.search(opts.depth, -evaluate.INFINITY, evaluate.INFINITY);
                 if (res) |r| {
                     try sendBestMove(r.move, logger);
                 } else {
@@ -259,13 +273,13 @@ fn startAnalysis(options: []GoOption, logger: Logger, a: Allocator) !void {
             SearchMode.mate => {},
             SearchMode.ponder => {},
             SearchMode.movetime => {
-                _ = try worker.start(&engine_data.pos, &engine_data.transposition_table, &engine_data.best_move, &engine_data.stats, logger, a);
+                _ = try worker.start(&searcher);
                 std.time.sleep(@floatToInt(u64, @intToFloat(f64, opts.movetime * std.time.ns_per_ms) * MOVETIME_SAFETY_FACTOR));
                 try stopAnalysis(logger);
             },
             SearchMode.nodes => {},
             SearchMode.infinite => {
-                _ = try worker.start(&engine_data.pos, &engine_data.transposition_table, &engine_data.best_move, &engine_data.stats, logger, a);
+                _ = try worker.start(&searcher);
             },
         }
     }
@@ -275,9 +289,7 @@ fn stopAnalysis(logger: Logger) !void {
     try worker.stop();
 
     // Send the best move found so far
-    try sendBestMove(engine_data.best_move, logger);
-
-    engine_data.best_move = null;
+    try sendBestMove(searcher.getBestMove(), logger);
 }
 
 fn sendBestMove(opt_m: ?Move, logger: Logger) !void {
