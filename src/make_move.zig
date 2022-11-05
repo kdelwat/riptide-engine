@@ -47,11 +47,11 @@ fn makeCapture(pos: *position.Position, m: Move) void {
 
     pos.board.boards[@enumToInt(m.piece_color)] ^= from_to_bitboard;
     pos.board.boards[@enumToInt(m.piece_type)] ^= from_to_bitboard;
-    pos.board.boards[@enumToInt(m.captured_piece_color orelse Color.white)] ^= to_bitboard;
-    pos.board.boards[@enumToInt(m.captured_piece_type orelse PieceType.empty)] ^= to_bitboard;
+    pos.board.boards[@enumToInt(m.captured_piece_color)] ^= to_bitboard;
+    pos.board.boards[@enumToInt(m.captured_piece_type)] ^= to_bitboard;
 
     pos.hash.flip_piece(m.from, m.piece_type, m.piece_color);
-    pos.hash.flip_piece(m.to, m.captured_piece_type orelse PieceType.empty, m.captured_piece_color orelse Color.white);
+    pos.hash.flip_piece(m.to, m.captured_piece_type, m.captured_piece_color);
     pos.hash.flip_piece(m.to, m.piece_type, m.piece_color);
 }
 
@@ -85,13 +85,13 @@ fn makePromoCapture(pos: *position.Position, m: Move) void {
 
     pos.board.boards[@enumToInt(m.piece_color)] ^= from_bitboard;
     pos.board.boards[@enumToInt(m.piece_type)] ^= from_bitboard;
-    pos.board.boards[@enumToInt(m.captured_piece_color orelse Color.white)] ^= to_bitboard;
-    pos.board.boards[@enumToInt(m.captured_piece_type orelse PieceType.empty)] ^= to_bitboard;
+    pos.board.boards[@enumToInt(m.captured_piece_color)] ^= to_bitboard;
+    pos.board.boards[@enumToInt(m.captured_piece_type)] ^= to_bitboard;
     pos.board.boards[@enumToInt(promotion_piece)] ^= to_bitboard;
     pos.board.boards[@enumToInt(m.piece_color)] ^= to_bitboard;
 
     pos.hash.flip_piece(m.from, m.piece_type, m.piece_color);
-    pos.hash.flip_piece(m.to, m.captured_piece_type orelse PieceType.empty, m.captured_piece_color orelse Color.white);
+    pos.hash.flip_piece(m.to, m.captured_piece_type, m.captured_piece_color);
     pos.hash.flip_piece(m.to, promotion_piece, m.piece_color);
 }
 
@@ -123,11 +123,11 @@ fn makeEnPassant(pos: *position.Position, m: Move) void {
     // movement.
     const capture_index = if (m.piece_color == Color.white) m.to - 8 else m.to + 8;
 
-    pos.board.unset(m.captured_piece_type orelse PieceType.empty, m.captured_piece_color orelse Color.white, capture_index);
+    pos.board.unset(m.captured_piece_type, m.captured_piece_color, capture_index);
 
     pos.hash.flip_piece(m.from, m.piece_type, m.piece_color);
     pos.hash.flip_piece(m.to, m.piece_type, m.piece_color);
-    pos.hash.flip_piece(capture_index, m.captured_piece_type orelse PieceType.empty, m.captured_piece_color orelse Color.white);
+    pos.hash.flip_piece(capture_index, m.captured_piece_type, m.captured_piece_color);
 }
 
 // Performs a move on the given position. This function takes a pointer to the
@@ -203,9 +203,9 @@ pub fn makeMove(pos: *position.Position, m: Move) MoveArtifacts {
     }
 
     // If the rook was captured, remove castling rights for that side.
-    if (m.captured_piece_type) |captured_piece_type| {
-        if (captured_piece_type == PieceType.rook) {
-            const captured_color = m.captured_piece_color orelse Color.white;
+    if (m.captured_piece_type != PieceType.empty) {
+        if (m.captured_piece_type == PieceType.rook) {
+            const captured_color = m.captured_piece_color;
 
             if (castling.hasCastlingRight(pos.castling, color.invert(pos.to_move), CastleSide.queen)) {
                 if (captured_color == Color.white and m.to == 0) {
@@ -285,8 +285,8 @@ pub fn unmakeMove(pos: *position.Position, m: Move, artifacts: MoveArtifacts) vo
         if (m.isPromotionCapture()) {
             pos.board.boards[@enumToInt(m.piece_color)] ^= from_bitboard;
             pos.board.boards[@enumToInt(m.piece_type)] ^= from_bitboard;
-            pos.board.boards[@enumToInt(m.captured_piece_color orelse Color.white)] ^= to_bitboard;
-            pos.board.boards[@enumToInt(m.captured_piece_type orelse PieceType.empty)] ^= to_bitboard;
+            pos.board.boards[@enumToInt(m.captured_piece_color)] ^= to_bitboard;
+            pos.board.boards[@enumToInt(m.captured_piece_type)] ^= to_bitboard;
 
             const promotion_piece = m.getPromotedPiece();
             pos.board.boards[@enumToInt(promotion_piece)] ^= to_bitboard;
@@ -308,7 +308,7 @@ pub fn unmakeMove(pos: *position.Position, m: Move, artifacts: MoveArtifacts) vo
             // movement, and recreate the pawn that was captured.
             const capture_index = if (m.piece_color == Color.white) m.to - 8 else m.to + 8;
 
-            pos.board.set(m.captured_piece_type orelse PieceType.empty, m.captured_piece_color orelse Color.white, capture_index);
+            pos.board.set(m.captured_piece_type, m.captured_piece_color, capture_index);
         } else if (m.is(MoveType.double_pawn_push)) {
             makeQuietMove(pos, m);
 

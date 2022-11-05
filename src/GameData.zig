@@ -5,7 +5,7 @@ const TranspositionTable = @import("TranspositionTable.zig").TranspositionTable;
 
 pub const GameOptions = struct { hash_table_size: u64, threads: u64 };
 
-pub const DEFAULTS = GameOptions{ .hash_table_size = 0, .threads = 1 };
+pub const DEFAULTS = GameOptions{ .hash_table_size = 16, .threads = 1 };
 
 pub const GameData = struct {
     tt: TranspositionTable,

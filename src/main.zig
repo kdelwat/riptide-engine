@@ -23,6 +23,7 @@ const GameData = @import("GameData.zig").GameData;
 const game = @import("GameData.zig");
 const builtin = @import("builtin");
 const Searcher = @import("search.zig").Searcher;
+const Color = @import("color.zig").Color;
 
 const start_position = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 

@@ -13,9 +13,14 @@ pub const TranspositionData = packed struct {
     depth: search.Depth, // 8
     score: evaluate.Score, // 16
     node_type: NodeType, // 2
-    padding: u38,
+    move: Move, // 30
+    padding: u8,
 
-    pub fn init(depth: search.Depth, score: evaluate.Score, node_type: NodeType) TranspositionData {
-        return TranspositionData{ .depth = depth, .score = score, .node_type = node_type, .padding = 0 };
+    pub fn init(depth: search.Depth, score: evaluate.Score, node_type: NodeType, move: ?Move) TranspositionData {
+        if (move) |m| {
+            return TranspositionData{ .depth = depth, .score = score, .node_type = node_type, .padding = 0, .move = m };
+        } else {
+            return TranspositionData{ .depth = depth, .score = score, .node_type = node_type, .padding = 0, .move = Move.initEmpty() };
+        }
     }
 };

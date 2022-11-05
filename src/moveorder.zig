@@ -105,7 +105,7 @@ pub fn cmp(context: *const MoveOrderContext, a: Move, b: Move) bool {
 // captures. This is NOT the most efficient way to do things, but it works for
 // now.
 pub fn evaluateCapture(pos: *position.Position, m: Move) i64 {
-    const captured_piece = evaluate.get_piece_value(m.captured_piece_type orelse PieceType.empty);
+    const captured_piece = evaluate.get_piece_value(m.captured_piece_type);
     const artifacts = make_move.makeMove(pos, m);
     const value = captured_piece - see(pos, m.to, color.invert(m.piece_color));
     make_move.unmakeMove(pos, m, artifacts);
@@ -120,7 +120,7 @@ fn see(pos: *position.Position, to: u8, side: Color) i64 {
     if (attacker) |a| {
         const artifacts = make_move.makeMove(pos, a);
 
-        value = std.math.max(0, evaluate.get_piece_value(a.captured_piece_type orelse PieceType.empty) - see(pos, to, color.invert(side)));
+        value = std.math.max(0, evaluate.get_piece_value(a.captured_piece_type) - see(pos, to, color.invert(side)));
 
         make_move.unmakeMove(pos, a, artifacts);
     }

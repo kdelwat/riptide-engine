@@ -25,20 +25,31 @@ pub const MoveType = enum(u4) {
     queen_promo_capture = 0b1111,
 };
 
-pub const Move = struct {
-    piece_color: Color,
-    piece_type: PieceType,
+pub const Move = packed struct {
+    piece_color: Color, // 1
+    piece_type: PieceType, // 4
 
-    captured_piece_type: ?PieceType = null,
-    captured_piece_color: ?Color = null,
+    // Ideally, these would be optionals, as they're only filled in when the
+    // move is a capture. But we want to be able to store a Move in the
+    // transposition tables, so we need a fixed size, and optionals aren't fixed.
+    captured_piece_type: PieceType = PieceType.empty, // 4
+    captured_piece_color: Color = Color.white, // 1
 
-    move_type: MoveType = MoveType.quiet,
+    move_type: MoveType = MoveType.quiet, // 4
 
-    from: u8,
-    to: u8,
+    from: u8, // 8
+    to: u8, // 8
 
     pub fn eq(self: Move, other: Move) bool {
         return self.piece_color == other.piece_color and self.move_type == other.move_type and self.from == other.from and self.to == other.to;
+    }
+
+    pub fn initEmpty() Move {
+        return Move{ .from = 0, .to = 0, .piece_color = Color.white, .piece_type = PieceType.empty };
+    }
+
+    pub fn isEmpty(m: Move) bool {
+        return m.from == 0 and m.to == 0;
     }
 
     pub fn initQuiet(from: u8, to: u8, piece_color: Color, piece_type: PieceType) Move {
@@ -206,8 +217,8 @@ pub const Move = struct {
         const from = bitboard.bitboardIndex(from_file, from_rank);
 
         var mt: MoveType = .quiet;
-        var captured_piece_type: ?PieceType = null;
-        var captured_piece_color: ?Color = null;
+        var captured_piece_type: PieceType = PieceType.empty;
+        var captured_piece_color: Color = Color.white;
 
         if (m.promotion) |promo| {
             if (pos.pieceOn(to)) {

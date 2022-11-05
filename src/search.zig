@@ -167,6 +167,10 @@ pub const Searcher = struct {
             // Ensure the entry has been evaluated deep enough
             if (entry.depth >= depth) {
                 if (entry.node_type == NodeType.exact) {
+                    if (!entry.move.isEmpty()) {
+                        self.pv.set(ply, entry.move);
+                    }
+
                     return entry.score;
                 } else if (entry.node_type == NodeType.lowerbound) {
                     new_alpha = std.math.max(new_alpha, entry.score);
@@ -182,7 +186,7 @@ pub const Searcher = struct {
         if (depth == 0) {
             self.stats.nodes_evaluated += 1;
             var q = self.quiesce(new_alpha, new_beta);
-            var tt_data = TranspositionData.init(0, q, NodeType.exact);
+            var tt_data = TranspositionData.init(0, q, NodeType.exact, null);
             self.game.tt.put(&self.pos, tt_data);
             return q;
         }
@@ -194,6 +198,8 @@ pub const Searcher = struct {
 
         var did_beta_cutoff: bool = false;
         var beta_cutoff: Score = 0;
+
+        var new_best_move: ?Move = null;
 
         while (self.gen.next()) |m| {
             // Make the move.
@@ -217,6 +223,7 @@ pub const Searcher = struct {
                 new_alpha = score;
 
                 // This is the new best move / principal variation
+                new_best_move = m;
                 self.pv.set(ply, m);
             }
 
@@ -226,18 +233,18 @@ pub const Searcher = struct {
 
         if (did_beta_cutoff) {
             // Fail-high = lower bound on score
-            var tt_data = TranspositionData.init(depth, beta_cutoff, NodeType.lowerbound);
+            var tt_data = TranspositionData.init(depth, beta_cutoff, NodeType.lowerbound, null);
             self.game.tt.put(&self.pos, tt_data);
 
             return beta_cutoff;
         } else if (new_alpha > alpha) {
             // If alpha improved, new exact score
-            var tt_data = TranspositionData.init(depth, new_alpha, NodeType.exact);
+            var tt_data = TranspositionData.init(depth, new_alpha, NodeType.exact, new_best_move);
             self.game.tt.put(&self.pos, tt_data);
             return new_alpha;
         } else {
             // Fail-low = upper bound on score
-            var tt_data = TranspositionData.init(depth, new_alpha, NodeType.upperbound);
+            var tt_data = TranspositionData.init(depth, new_alpha, NodeType.upperbound, null);
             self.game.tt.put(&self.pos, tt_data);
             return new_alpha;
         }
