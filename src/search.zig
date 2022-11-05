@@ -57,7 +57,7 @@ pub fn searchInfinite(pos: *position.Position, tt: *TranspositionTable, best_mov
 
         if (cancelled.*) {
             try logger.log("SEARCH", "thread cancelled", .{});
-            std.debug.print("TT stats: {}", .{tt.stats});
+            try logger.log("SEARCH", "TT stats: {}", .{tt.stats});
             break;
         }
 

@@ -170,7 +170,7 @@ fn startNewGame(pos: position.Position, a: Allocator) !void {
         engine_data.transposition_table.deinit();
     }
 
-    engine_data = GlobalData{ .pos = pos, .best_move = null, .stats = search.SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 }, .transposition_table = try TranspositionTable.init(a, false) };
+    engine_data = GlobalData{ .pos = pos, .best_move = null, .stats = search.SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 }, .transposition_table = try TranspositionTable.init(a, true) };
 }
 
 fn startAnalysis(options: []GoOption, logger: Logger, a: Allocator) !void {

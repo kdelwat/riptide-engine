@@ -10,3 +10,5 @@ latest          1136   1857263   2259354    95.49s         533341         624833
 latest          1546   1500597   2254461   120.34s        1018272        1162814        1176782        1342280  | Quiescence search
 latest          1516   2632383   1696706    61.22s        1018272        1162814        1176782        1342280  | Upgrade to Zig 0.10; on desktop
 latest          1507   2425959   1722512    69.90s        1018272        1162814        1176782        1342280  | Zobrist hashes for positions
+latest          1511   2336354   1345951    71.32s         967852        1141206        1104490        1302313  | Transposition table implemented, not enabled
+latest          1458   2257438   1313076    71.64s         967852        1141206        1104490        1302313  | Transposition table implemented, enabled
