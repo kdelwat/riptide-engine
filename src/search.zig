@@ -1,6 +1,7 @@
 const position = @import("./position.zig");
 const MoveGenerator = @import("./movegen.zig").MoveGenerator;
 const PVTable = @import("./pv.zig").PVTable;
+const Killers = @import("./killers.zig").Killers;
 const make_move = @import("./make_move.zig");
 const Move = @import("./move.zig").Move;
 const move = @import("./move.zig");
@@ -35,9 +36,10 @@ pub const Searcher = struct {
     logger: Logger,
     gen: MoveGenerator,
     pv: PVTable,
+    killers: Killers,
 
     pub fn init(pos: position.Position, game: *GameData, allocator: Allocator, logger: Logger) Searcher {
-        return Searcher{ .pos = pos, .game = game, .best_move = null, .stats = SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 }, .cancelled = false, .allocator = allocator, .logger = logger, .gen = MoveGenerator.init(), .pv = PVTable.init(logger) };
+        return Searcher{ .pos = pos, .game = game, .best_move = null, .stats = SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 }, .cancelled = false, .allocator = allocator, .logger = logger, .gen = MoveGenerator.init(), .pv = PVTable.init(logger), .killers = Killers.init() };
     }
 
     // Infinite search uses an iterative deepening approach. Searches are performed at
@@ -79,10 +81,6 @@ pub const Searcher = struct {
                     if (alpha == -evaluate.INFINITY or beta == -evaluate.INFINITY) {
                         // If we've already missed an aspiration window, and we miss again on a full
                         // search, the position is doomed.
-                        self.gen.generate(&self.pos);
-                        while (self.gen.next()) |m| {
-                            self.best_move = m;
-                        }
                         self.logger.log("SEARCH", "Detected hopeless situation", .{}) catch unreachable;
                         break;
                     }
@@ -99,6 +97,18 @@ pub const Searcher = struct {
             }
 
             depth += 1;
+        }
+
+        // If we exit the search without a best move, it could be for two reasons:
+        // 1. The position is hopeless and there's no best move
+        // 2. The search was cancelled before finishing the first ply
+        // In either case, just return any move
+        if (self.best_move == null) {
+            self.gen.generate(&self.pos);
+            while (self.gen.next()) |m| {
+                self.best_move = m;
+                return;
+            }
         }
     }
 
@@ -212,7 +222,7 @@ pub const Searcher = struct {
         // Otherwise, generate all possible moves.
         self.gen.generate(&self.pos);
 
-        self.gen.orderer.setPV(self.pv.get(ply));
+        self.gen.orderer.set_pv_and_killers(self.pv.get(ply), self.killers.get_first(ply), self.killers.get_second(ply));
 
         var did_beta_cutoff: bool = false;
         var beta_cutoff: Score = 0;
@@ -222,12 +232,12 @@ pub const Searcher = struct {
         while (self.gen.next()) |m| {
             //var buf: [5]u8 = [_]u8{ 0, 0, 0, 0, 0 };
             //m.toLongAlgebraic(buf[0..]) catch unreachable;
-            //i = 0;
+            //var i: u64 = 0;
             //while (i < ply) {
             //    std.debug.print("..", .{});
             //    i += 1;
             //}
-            //std.debug.print("{s}\n", .{buf});
+            //std.debug.print("{s} ({}, {?})\n", .{ buf, self.gen.orderer.getEvaluation(m).order, self.gen.orderer.getEvaluation(m).see_value });
 
             // Make the move.
             const artifacts = make_move.makeMove(&self.pos, m);
@@ -242,6 +252,7 @@ pub const Searcher = struct {
                 self.gen.cutoff();
                 did_beta_cutoff = true;
                 beta_cutoff = new_beta;
+                new_best_move = m;
                 break;
             }
 
@@ -278,6 +289,11 @@ pub const Searcher = struct {
             var tt_data = TranspositionData.init(depth, beta_cutoff, NodeType.lowerbound, null);
             self.game.tt.put(&self.pos, tt_data);
 
+            if (new_best_move) |m| {
+                if (m.move_type == move.MoveType.quiet) {
+                    self.killers.put(ply, m);
+                }
+            }
             return beta_cutoff;
         } else if (new_alpha > orig_alpha) {
             //std.debug.print("EXACT\n", .{});
@@ -310,7 +326,7 @@ pub const Searcher = struct {
         self.gen.generate(&self.pos);
 
         // Don't use the PV
-        self.gen.orderer.setPV(null);
+        self.gen.orderer.set_pv_and_killers(null, null, null);
 
         // Loop through captures
         while (self.gen.next()) |m| {

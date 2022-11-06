@@ -13,11 +13,7 @@ const position = @import("./position.zig");
 
 const MOVE_METADATA_ARRAY_SIZE = 64 * 64;
 
-const MoveOrder = enum(u4) {
-    pv = 0,
-    capture = 1,
-    other = 2,
-};
+const MoveOrder = enum(u4) { pv = 0, winning_capture = 1, killer = 2, other = 3, losing_capture = 4 };
 
 const MoveEvaluation = struct {
     order: MoveOrder,
@@ -26,10 +22,14 @@ const MoveEvaluation = struct {
 
 pub const MoveOrderer = struct {
     moves: [MOVE_METADATA_ARRAY_SIZE]MoveEvaluation,
+
+    // Moves from precomputed line
     pv: ?Move,
+    killer1: ?Move,
+    killer2: ?Move,
 
     pub fn init() MoveOrderer {
-        var orderer = MoveOrderer{ .moves = undefined, .pv = null };
+        var orderer = MoveOrderer{ .moves = undefined, .pv = null, .killer1 = null, .killer2 = null };
 
         orderer.clear();
 
@@ -42,10 +42,22 @@ pub const MoveOrderer = struct {
                 if (m.eq(known_pv)) {
                     self.moves[self.see_index(m)].order = MoveOrder.pv;
                 }
+            } else if (self.killer1) |k1| {
+                if (m.eq(k1)) {
+                    self.moves[self.see_index(m)].order = MoveOrder.killer;
+                }
+            } else if (self.killer2) |k2| {
+                if (m.eq(k2)) {
+                    self.moves[self.see_index(m)].order = MoveOrder.killer;
+                }
             } else if (m.move_type == move.MoveType.capture) {
                 const see_value = evaluateCapture(pos, m);
                 self.moves[self.see_index(m)].see_value = see_value;
-                self.moves[self.see_index(m)].order = MoveOrder.capture;
+                if (see_value < 0) {
+                    self.moves[self.see_index(m)].order = MoveOrder.losing_capture;
+                } else {
+                    self.moves[self.see_index(m)].order = MoveOrder.winning_capture;
+                }
             } else {
                 self.moves[self.see_index(m)].order = MoveOrder.other;
             }
@@ -69,8 +81,10 @@ pub const MoveOrderer = struct {
         return @intCast(usize, m.from) * 64 + @intCast(usize, m.to);
     }
 
-    pub fn setPV(self: *MoveOrderer, pv: ?Move) void {
+    pub fn set_pv_and_killers(self: *MoveOrderer, pv: ?Move, killer1: ?Move, killer2: ?Move) void {
         self.pv = pv;
+        self.killer1 = killer1;
+        self.killer2 = killer2;
     }
 };
 
@@ -84,7 +98,15 @@ pub fn cmp(context: *const MoveOrderContext, a: Move, b: Move) bool {
     const eval_a = context.orderer.getEvaluation(a);
     const eval_b = context.orderer.getEvaluation(b);
 
-    if (eval_a.order == MoveOrder.capture and eval_b.order == MoveOrder.capture) {
+    if (eval_a.order == MoveOrder.winning_capture and eval_b.order == MoveOrder.winning_capture) {
+        const a_see = eval_a.see_value orelse unreachable;
+        const b_see = eval_b.see_value orelse unreachable;
+
+        // Order by descending SEE value
+        return a_see > b_see;
+    }
+
+    if (eval_a.order == MoveOrder.losing_capture and eval_b.order == MoveOrder.losing_capture) {
         const a_see = eval_a.see_value orelse unreachable;
         const b_see = eval_b.see_value orelse unreachable;
 

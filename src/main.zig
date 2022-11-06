@@ -91,7 +91,6 @@ fn nextLine(reader: anytype, buffer: []u8) !?[]const u8 {
 }
 
 pub fn main() anyerror!void {
-    std.debug.print("max ={}, min = {}\n", .{ std.math.maxInt(i16), std.math.minInt(i16) });
     // Get file descriptors for IO
     const stdin = std.io.getStdIn();
 
@@ -104,6 +103,7 @@ pub fn main() anyerror!void {
     // Create logger
     const time = std.time.nanoTimestamp();
     const logfile_path: []const u8 = try std.fmt.allocPrint(gpa.allocator(), "/mnt/ext/riptide.{}.txt", .{time});
+    defer gpa.allocator().free(logfile_path);
 
     const logfile = try std.fs.createFileAbsolute(
         logfile_path,
@@ -130,6 +130,10 @@ pub fn main() anyerror!void {
         }
 
         quit = try handleCommand(input, logger, gpa.allocator());
+    }
+
+    if (has_game_data) {
+        game_data.deinit();
     }
 }
 
