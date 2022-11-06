@@ -91,6 +91,7 @@ fn nextLine(reader: anytype, buffer: []u8) !?[]const u8 {
 }
 
 pub fn main() anyerror!void {
+    std.debug.print("max ={}, min = {}\n", .{ std.math.maxInt(i16), std.math.minInt(i16) });
     // Get file descriptors for IO
     const stdin = std.io.getStdIn();
 
@@ -200,6 +201,7 @@ fn startNewGame(a: Allocator) !void {
     }
 
     game_data = try GameData.init(a, game_options);
+    has_game_data = true;
 }
 
 fn startNewPosition(pos: position.Position, allocator: Allocator, logger: Logger) !void {

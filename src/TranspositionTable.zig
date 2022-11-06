@@ -1,6 +1,7 @@
 const std = @import("std");
 const Position = @import("position.zig").Position;
 const Move = @import("move.zig").Move;
+const MoveType = @import("move.zig").MoveType;
 const TranspositionData = @import("TranspositionData.zig").TranspositionData;
 
 const Key = u64;
@@ -50,6 +51,8 @@ pub const TranspositionTable = struct {
         if (!self.enabled) {
             return;
         }
+
+        // std.debug.print("PUT entry: from = {}, to = {}\n", .{ data.from, data.to });
 
         self.stats.n_store += 1;
 

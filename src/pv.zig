@@ -1,14 +1,17 @@
 const Move = @import("./move.zig").Move;
 const std = @import("std");
 const MAX_DEPTH = @import("./movegen.zig").MAX_DEPTH;
+const Logger = @import("./logger.zig").Logger;
 
 const PV_TABLE_SIZE = MAX_DEPTH * MAX_DEPTH;
 
 pub const PVTable = struct {
     data: [PV_TABLE_SIZE]?Move,
 
-    pub fn init() PVTable {
-        var t = PVTable{ .data = undefined };
+    logger: Logger,
+
+    pub fn init(l: Logger) PVTable {
+        var t = PVTable{ .data = undefined, .logger = l };
 
         var i: usize = 0;
         while (i < PV_TABLE_SIZE) {

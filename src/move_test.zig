@@ -12,19 +12,3 @@ test "toLongAlgebraic (pawn)" {
     m.toLongAlgebraic(buf[0..]) catch unreachable;
     try expectEqualStrings("a2a4", buf[0..]);
 }
-
-test "toLongAlgebraic (knight)" {
-    const m = Move.initQuiet(62, 45, Color.black, PieceType.knight);
-    var buf: [4]u8 = [_]u8{ 0, 0, 0, 0 };
-
-    m.toLongAlgebraic(buf[0..]) catch unreachable;
-    try expectEqualStrings("g8f6", buf[0..]);
-}
-
-test "toLongAlgebraic (castle)" {
-    const m = Move.initQuiet(62, 45, Color.black, PieceType.knight);
-    var buf: [4]u8 = [_]u8{ 0, 0, 0, 0 };
-
-    m.toLongAlgebraic(buf[0..]) catch unreachable;
-    try expectEqualStrings("g8f6", buf[0..]);
-}

@@ -30,7 +30,8 @@ pub fn build(b: *Builder) void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
-    const test_files: [7][]const u8 = [_][]const u8{
+    const test_files: [8][]const u8 = [_][]const u8{
+        "src/transposition_test.zig",
         "src/make_move_test.zig",
         "src/moveorder_test.zig",
         "src/move_test.zig",

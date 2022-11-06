@@ -44,14 +44,6 @@ pub const Move = packed struct {
         return self.piece_color == other.piece_color and self.move_type == other.move_type and self.from == other.from and self.to == other.to;
     }
 
-    pub fn initEmpty() Move {
-        return Move{ .from = 0, .to = 0, .piece_color = Color.white, .piece_type = PieceType.empty };
-    }
-
-    pub fn isEmpty(m: Move) bool {
-        return m.from == 0 and m.to == 0;
-    }
-
     pub fn initQuiet(from: u8, to: u8, piece_color: Color, piece_type: PieceType) Move {
         return Move{
             .from = from,
@@ -191,6 +183,12 @@ pub const Move = packed struct {
         const from_rank = bitboard.rankIndex(from) + '1';
         const from_file = bitboard.fileIndex(from) + 'a';
 
+        if (bitboard.rankIndex(to) > 7 or bitboard.fileIndex(to) > 7 or bitboard.rankIndex(from) > 7 or bitboard.fileIndex(from) > 7) {
+            std.debug.print("WARNING Invalid entry: from = {}, to = {}\n", .{ from, to });
+            std.debug.print("-> piece = {}\n", .{self.piece_type});
+            std.debug.print("-> color = {}\n", .{self.piece_color});
+        }
+
         if (self.isPromotion()) {
             const promotion_piece = self.getPromotedPiece();
             _ = try std.fmt.bufPrint(
@@ -205,6 +203,12 @@ pub const Move = packed struct {
             "{c}{c}{c}{c}",
             .{ from_file, from_rank, to_file, to_rank },
         );
+
+        if (bitboard.rankIndex(to) > 7 or bitboard.fileIndex(to) > 7 or bitboard.rankIndex(from) > 7 or bitboard.fileIndex(from) > 7 or buf[1] == 'I') {
+            std.debug.print("WARNING Invalid entry: from = {}, to = {}\n", .{ from, to });
+            std.debug.print("-> piece = {}\n", .{self.piece_type});
+            std.debug.print("-> color = {}\n", .{self.piece_color});
+        }
     }
 
     pub fn fromLongAlgebraic(pos: *position.Position, m: LongAlgebraicMove) Move {

@@ -37,7 +37,7 @@ pub const Searcher = struct {
     pv: PVTable,
 
     pub fn init(pos: position.Position, game: *GameData, allocator: Allocator, logger: Logger) Searcher {
-        return Searcher{ .pos = pos, .game = game, .best_move = null, .stats = SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 }, .cancelled = false, .allocator = allocator, .logger = logger, .gen = MoveGenerator.init(), .pv = PVTable.init() };
+        return Searcher{ .pos = pos, .game = game, .best_move = null, .stats = SearchStats{ .nodes_evaluated = 0, .nodes_visited = 0 }, .cancelled = false, .allocator = allocator, .logger = logger, .gen = MoveGenerator.init(), .pv = PVTable.init(logger) };
     }
 
     // Infinite search uses an iterative deepening approach. Searches are performed at
@@ -76,8 +76,20 @@ pub const Searcher = struct {
                 if (bm.score <= alpha or bm.score >= beta) {
                     // Aspiration window missed; do a full re-search
                     try self.logger.log("SEARCH", "Missed aspiration window at depth {}\n", .{depth});
+                    if (alpha == -evaluate.INFINITY or beta == -evaluate.INFINITY) {
+                        // If we've already missed an aspiration window, and we miss again on a full
+                        // search, the position is doomed.
+                        self.gen.generate(&self.pos);
+                        while (self.gen.next()) |m| {
+                            self.best_move = m;
+                        }
+                        self.logger.log("SEARCH", "Detected hopeless situation", .{}) catch unreachable;
+                        break;
+                    }
+
                     alpha = -evaluate.INFINITY;
                     beta = evaluate.INFINITY;
+
                     continue;
                 } else {
                     alpha = bm.score - ASPIRATION_WINDOW;
@@ -151,36 +163,42 @@ pub const Searcher = struct {
     const AlphaBetaError = error{Cancelled};
 
     fn alphaBeta(self: *Searcher, alpha: Score, beta: Score, depth: Depth, ply: Depth) AlphaBetaError!Score {
-        //std.debug.print("AB: pos={} alpha={} beta={} depth={}\n", .{ pos.hash.hash, alpha, beta, depth });
+        //var i: u64 = 0;
+        //while (i < ply) {
+        //    std.debug.print("..", .{});
+        //    i += 1;
+        //}
+        //std.debug.print("AB: alpha={} beta={} depth={}\n", .{ alpha, beta, depth });
+
         if (self.cancelled) {
             return AlphaBetaError.Cancelled;
         }
 
         self.stats.nodes_visited += 1;
 
-        var new_alpha: Score = alpha;
-        var new_beta: Score = beta;
+        var orig_alpha: Score = alpha;
+        var orig_beta: Score = beta;
 
         // Check the transposition table
         if (self.game.tt.get(&self.pos)) |entry| {
-            // std.debug.print("HIT {}\n", .{entry});
             // Ensure the entry has been evaluated deep enough
             if (entry.depth >= depth) {
                 if (entry.node_type == NodeType.exact) {
-                    if (!entry.move.isEmpty()) {
-                        self.pv.set(ply, entry.move);
+                    if (entry.getMove()) |m| {
+                        self.pv.set(ply, m);
                     }
 
                     return entry.score;
                 } else if (entry.node_type == NodeType.lowerbound) {
-                    new_alpha = std.math.max(new_alpha, entry.score);
+                    orig_alpha = std.math.max(orig_alpha, entry.score);
                 } else {
-                    new_beta = std.math.min(new_beta, entry.score);
+                    orig_beta = std.math.min(orig_beta, entry.score);
                 }
             }
-        } else {
-            //std.debug.print("MISS \n", .{});
         }
+
+        var new_alpha: Score = orig_alpha;
+        var new_beta: Score = orig_beta;
 
         // At the bottom of the tree, return the score of the position for the attacking player.
         if (depth == 0) {
@@ -202,6 +220,15 @@ pub const Searcher = struct {
         var new_best_move: ?Move = null;
 
         while (self.gen.next()) |m| {
+            //var buf: [5]u8 = [_]u8{ 0, 0, 0, 0, 0 };
+            //m.toLongAlgebraic(buf[0..]) catch unreachable;
+            //i = 0;
+            //while (i < ply) {
+            //    std.debug.print("..", .{});
+            //    i += 1;
+            //}
+            //std.debug.print("{s}\n", .{buf});
+
             // Make the move.
             const artifacts = make_move.makeMove(&self.pos, m);
 
@@ -231,18 +258,35 @@ pub const Searcher = struct {
             make_move.unmakeMove(&self.pos, m, artifacts);
         }
 
+        //std.debug.print("Finished ply: {}\n", .{ply});
+
+        if (ply == 0 and self.pv.get(0) == null) {
+            // We're cooked!
+            // At the root there is no move that will improve our position.
+            // Usually this means there's a forced mate. Just pick any valid
+            // move as we're doomed anyway...
+            self.gen.generate(&self.pos);
+            while (self.gen.next()) |m| {
+                self.pv.set(0, m);
+            }
+            self.logger.log("SEARCH", "Detected hopeless situation", .{}) catch unreachable;
+        }
+
         if (did_beta_cutoff) {
+            //std.debug.print("BETA\n", .{});
             // Fail-high = lower bound on score
             var tt_data = TranspositionData.init(depth, beta_cutoff, NodeType.lowerbound, null);
             self.game.tt.put(&self.pos, tt_data);
 
             return beta_cutoff;
-        } else if (new_alpha > alpha) {
+        } else if (new_alpha > orig_alpha) {
+            //std.debug.print("EXACT\n", .{});
             // If alpha improved, new exact score
             var tt_data = TranspositionData.init(depth, new_alpha, NodeType.exact, new_best_move);
             self.game.tt.put(&self.pos, tt_data);
             return new_alpha;
         } else {
+            //std.debug.print("ALPHA\n", .{});
             // Fail-low = upper bound on score
             var tt_data = TranspositionData.init(depth, new_alpha, NodeType.upperbound, null);
             self.game.tt.put(&self.pos, tt_data);

@@ -13,3 +13,4 @@ latest          1507   2425959   1722512    69.90s        1018272        1162814
 latest          1511   2336354   1345951    71.32s         967852        1141206        1104490        1302313  | Transposition table implemented, not enabled
 latest          1458   2257438   1313076    71.64s         967852        1141206        1104490        1302313  | Transposition table implemented, enabled
 latest          1464   2437995   1302531    69.99s        1018272        1162814         775140        1184571  | Transposition table fix
+latest          1462   2412056   1323623    66.53s        1018272        1162814         506776         831915  | Bugfixes for vs. engine play
